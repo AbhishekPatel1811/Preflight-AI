@@ -1,6 +1,6 @@
-# Launch Lens AI
+# PreflightAI
 
-Launch Lens AI is a local-only Next.js MVP for turning a rough launch idea into an actionable release plan and a LaunchLens readiness report wrapper. It uses a polished React UI, server-side validation, deterministic local planning tools, and the OpenAI Agents SDK for TypeScript.
+PreflightAI is a local-only Next.js MVP for turning rough launch inputs into an actionable readiness report, prioritized fix board, and launch pack. It uses a polished React UI, server-side validation, deterministic local planning tools, and the OpenAI Agents SDK for TypeScript.
 
 ## Features
 
@@ -8,7 +8,7 @@ Launch Lens AI is a local-only Next.js MVP for turning a rough launch idea into 
 - Live progress timeline for run and tool events
 - Server-sent events from the local API route
 - Final structured result with prioritized plan, risk register, owner checklist, launch copy, and follow-up questions
-- LaunchLens report wrapper with overall readiness score, module scores, and top fixes
+- PreflightAI report wrapper with overall readiness score, module scores, and top fixes
 - Server-only OpenAI and Agents SDK boundary
 - Deterministic local tools for launch planning support
 
@@ -43,12 +43,12 @@ Next.js also reads `.env`, but `.env.local` is the preferred local file and can 
 
 ## Architecture
 
-- Frontend: `app/page.tsx` renders the marketing landing page and `app/app/page.tsx` renders `components/LaunchDeskApp.tsx`.
+- Frontend: `app/page.tsx` renders the marketing landing page and `app/app/page.tsx` renders the planner component.
 - Validation: `lib/validators.ts` validates launch input on the client and server.
 - Server boundary: `lib/server/env.ts` imports `server-only` and reads secrets only on the server.
 - API routes: `app/api/agent/route.ts` validates input, checks env, and streams normalized events.
-- Agent: `lib/agents/launchDeskAgent.ts` defines the non-streaming `runLaunchDeskAgent` call and the streamed wrapper.
-- LaunchLens report layer: `lib/types/launchlens.ts` defines the unified report schema and `lib/agents/launchLensAgent.ts` maps the existing core agent output into that schema.
+- Agent: `lib/agents/preflightAgent.ts` defines the non-streaming `runPreflightAgent` call and the streamed wrapper.
+- Report layer: `lib/types/preflight.ts` defines the current unified report schema and `lib/agents/preflightReport.ts` maps the existing core agent output into that schema.
 - Instructions: `lib/agents/instructions.ts`.
 - Tools: `lib/agents/tools/*`.
 - Result schema: `lib/types.ts`.
@@ -59,9 +59,9 @@ All OpenAI calls happen server-side. The frontend never receives `OPENAI_API_KEY
 
 The implementation follows the official OpenAI Agents SDK TypeScript docs:
 
-- `new Agent({ ... })` creates the Launch Lens AI agent.
+- `new Agent({ ... })` creates the PreflightAI agent.
 - `tool({ parameters: z.object(...), execute })` defines local deterministic tools.
-- `outputType: launchDeskResultSchema` asks the SDK for structured output.
+- `outputType: preflightResultSchema` asks the SDK for structured output.
 - `run(agent, prompt)` provides the non-streaming server call.
 - `run(agent, prompt, { stream: true })` provides the event stream used by the API route.
 
@@ -73,21 +73,21 @@ type StreamEvent =
   | { type: "tool_started"; toolName: string; message: string }
   | { type: "tool_completed"; toolName: string; message: string }
   | { type: "text_delta"; delta: string }
-  | { type: "final"; data: LaunchDeskResult }
+  | { type: "final"; data: PreflightResult }
   | { type: "error"; message: string };
 ```
 
 The streamed route emits named SSE frames (`event: <type>` plus a JSON `data:` payload). The UI parser accepts CRLF or LF framing, preserves incomplete chunks between reads, ignores comment-only frames, and only keeps progress/final/error events in the timeline while appending `text_delta` payloads to the live draft.
 
-## LaunchLens Phase 1
+## PreflightAI Phase 1
 
-The current planning agent is the core agent foundation for LaunchLens AI.
+The current planning agent is the core foundation for PreflightAI.
 
 Phase 1 adds:
 
-- `docs/launchlens-product-blueprint.md`
-- unified `LaunchLensReport` schema
-- mapper from the existing agent result into `LaunchLensReport`
+- `docs/preflight-product-blueprint.md`
+- unified report schema
+- mapper from the existing agent result into the report schema
 - Overall Launch Readiness Score wrapper card
 - Top Fixes wrapper section
 
@@ -161,7 +161,7 @@ Manual UI checklist:
 - Tool progress appears
 - Model text deltas appear
 - Final structured result renders
-- LaunchLens report wrapper renders above the existing detailed plan
+- PreflightAI report wrapper renders above the existing detailed plan
 - Missing `OPENAI_API_KEY` shows a safe server error
 - Browser network response does not expose the API key
 
@@ -190,8 +190,8 @@ Deployment is intentionally out of scope. If deployed later, use server-only env
 
 - Change model: `.env.local` or `lib/server/env.ts`.
 - Change instructions: `lib/agents/instructions.ts`.
-- Add tools: create a new file under `lib/agents/tools` and add it to the `tools` array in `lib/agents/launchDeskAgent.ts`.
-- Change result shape: update `launchDeskResultSchema` in `lib/types.ts` and the renderer in `components/LaunchPlanResult.tsx`.
+- Add tools: create a new file under `lib/agents/tools` and add it to the `tools` array in `lib/agents/preflightAgent.ts`.
+- Change result shape: update `preflightResultSchema` in `lib/types.ts` and the renderer in `components/LaunchPlanResult.tsx`.
 
 ## Rollback
 
