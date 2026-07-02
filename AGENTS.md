@@ -2,9 +2,9 @@
 
 Guidance for AI coding assistants in this repository.
 
-Product name: **Launch Lens AI**.
+Product name: **PreflightAI**.
 
-Launch Lens AI turns rough product launch ideas into release-ready plans: prioritized work, risk register, owner checklists, launch copy, and follow-up questions.
+PreflightAI turns rough product launch ideas into release-ready plans: prioritized work, risk register, owner checklists, launch copy, and follow-up questions.
 
 This file is the project-specific source of truth for assistant behavior. `CLAUDE.md` is a private reference file from another project and must not be copied literally or treated as project facts.
 
@@ -122,7 +122,7 @@ For frontend work:
 
 Current app structure:
 
-- `/` is the animated marketing landing page for Launch Lens AI.
+- `/` is the animated marketing landing page for PreflightAI.
 - `/app` is the working launch planner.
 - `/api/agent` validates input and streams agent progress through SSE.
 - `/api/health` is the health endpoint.
@@ -131,7 +131,7 @@ Core files:
 
 - `app/page.tsx` renders the landing page.
 - `app/app/page.tsx` renders the planner.
-- `components/LaunchDeskApp.tsx` is the working planner UI. The name is legacy code and may be renamed later.
+- `components/PreflightApp.tsx` is the working planner UI.
 - `components/LaunchPlanResult.tsx` renders structured results.
 - `components/landing/*` contains marketing sections and Motion components.
 - `components/ui/*` contains shared shadcn-style primitives.
@@ -214,7 +214,7 @@ Do not change the streaming protocol casually. Existing UI and tests expect thes
 
 If changing result shape, update all of:
 
-- `launchDeskResultSchema` in `lib/types.ts`
+- `preflightResultSchema` in `lib/types.ts`
 - agent instructions
 - result renderer
 - tests
@@ -222,7 +222,7 @@ If changing result shape, update all of:
 
 ## Frontend Quality Bar
 
-Launch Lens AI should feel like a premium SaaS product, not a generic AI demo.
+PreflightAI should feel like a premium SaaS product, not a generic AI demo.
 
 For every UI change:
 
