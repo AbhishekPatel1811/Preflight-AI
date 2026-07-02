@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { mapPreflightResultToPreflightReport } from "@/lib/agents/preflightReport";
 import { PRODUCT_NAME } from "@/lib/brand";
+import { formatPreflightReportMarkdown } from "@/lib/reportExport";
 import type { PreflightInput, PreflightResult } from "@/lib/types";
 import type { LaunchFix } from "@/lib/types/preflight";
 import { getPreflightReportView, type PreflightFixLane } from "@/lib/ui/preflightViewModel";
@@ -343,6 +344,8 @@ export function LaunchPlanResult({
   input: PreflightInput | null;
   result: PreflightResult | null;
 }) {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+
   if (!result) {
     return <PendingResultPreview />;
   }
@@ -355,14 +358,49 @@ export function LaunchPlanResult({
       constraints: "",
       availableAssets: ""
     };
-  const report = mapPreflightResultToPreflightReport(reportInput, result);
+  const generatedResult = result;
+  const report = mapPreflightResultToPreflightReport(reportInput, generatedResult);
   const view = getPreflightReportView(report);
+
+  async function copyFullReport() {
+    try {
+      await navigator.clipboard.writeText(formatPreflightReportMarkdown(reportInput, generatedResult));
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-bold text-card-foreground">Move this report into your launch workspace</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            Copy the full report as markdown for docs, issues, or team updates.
+          </p>
+        </div>
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void copyFullReport();
+            }}
+          >
+            <CopyIcon className="h-4 w-4" aria-hidden="true" />
+            {copyStatus === "copied" ? "Copied report" : "Copy report"}
+          </Button>
+          {copyStatus === "failed" ? (
+            <p className="text-xs font-medium text-destructive" role="status">
+              Copy failed. Select the sections below manually.
+            </p>
+          ) : null}
+        </div>
+      </div>
       <PreflightReportWrapper report={report} />
       <FixesBoard lanes={view.fixLanes} />
-      <LaunchPack result={result} />
+      <LaunchPack result={generatedResult} />
     </div>
   );
 }
