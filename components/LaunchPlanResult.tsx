@@ -1,336 +1,45 @@
 "use client";
 
-import { CheckSquare, Copy as CopyIcon, Gauge, HelpCircle, ListChecks, ScanSearch, TriangleAlert } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Copy as CopyIcon, Radar } from "lucide-react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { mapPreflightResultToPreflightReport } from "@/lib/agents/preflightReport";
-import { PRODUCT_NAME } from "@/lib/brand";
 import { formatPreflightReportMarkdown } from "@/lib/reportExport";
 import type { PreflightInput, PreflightResult } from "@/lib/types";
-import type { LaunchFix } from "@/lib/types/preflight";
-import { getPreflightReportView, type PreflightFixLane } from "@/lib/ui/preflightViewModel";
+import { preflightWorkspaceTabs, type PreflightWorkspaceTabId } from "@/lib/ui/preflightLayoutViewModel";
+import { getPreflightReportView } from "@/lib/ui/preflightViewModel";
+import { LaunchPack } from "./LaunchPack";
+import { PendingResultPreview } from "./PendingResultPreview";
+import { PreflightFixesBoard } from "./PreflightFixesBoard";
 import { PreflightReportWrapper } from "./PreflightReportWrapper";
 
-type BadgeVariant = "default" | "secondary" | "outline" | "success" | "info" | "warning" | "destructive";
-
-function priorityVariant(priority: LaunchFix["priority"]): BadgeVariant {
-  if (priority === "P0") {
-    return "destructive";
-  }
-
-  if (priority === "P1") {
-    return "warning";
-  }
-
-  return "secondary";
-}
-
-function severityVariant(severity: PreflightResult["riskRegister"][number]["severity"]): BadgeVariant {
-  if (severity === "high") {
-    return "destructive";
-  }
-
-  if (severity === "medium") {
-    return "warning";
-  }
-
-  return "secondary";
-}
-
-function LaunchPackPanel({
-  title,
-  description,
-  icon,
-  children
-}: {
-  title: string;
-  description: string;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-lg border border-border bg-background p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-muted text-muted-foreground">{icon}</span>
-        <div>
-          <h3 className="text-sm font-bold text-foreground">{title}</h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
-        </div>
-      </div>
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
-
-function EmptyState({ children }: { children: ReactNode }) {
-  return (
-    <p className="rounded-md border border-dashed border-border bg-muted p-3 text-sm leading-6 text-muted-foreground">
-      {children}
-    </p>
-  );
-}
-
-function PendingResultPreview() {
-  const previewItems = [
-    {
-      title: "Readiness report",
-      body: "Score, module health, and a spotlight fix.",
-      icon: <Gauge className="h-4 w-4" aria-hidden="true" />
-    },
-    {
-      title: "Fixes board",
-      body: "P0, P1, and P2 lanes for the next moves.",
-      icon: <ScanSearch className="h-4 w-4" aria-hidden="true" />
-    },
-    {
-      title: "Launch pack",
-      body: "Plan, risks, owners, messages, and open questions.",
-      icon: <ListChecks className="h-4 w-4" aria-hidden="true" />
-    }
-  ];
-
+function SignalsPlaceholder() {
   return (
     <Card>
       <CardHeader>
         <Badge variant="outline" className="w-fit uppercase">
-          Output preview
+          Signals
         </Badge>
-        <CardTitle className="mt-3">Your {PRODUCT_NAME} report will appear here</CardTitle>
-        <CardDescription>Submit a brief to generate the report card, fixes board, and launch pack.</CardDescription>
+        <CardTitle className="mt-3">Brief-only signals for this phase</CardTitle>
+        <CardDescription>
+          This run uses your launch brief, constraints, assets, and planning tools. URL signal extraction is next.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 md:grid-cols-3">
-          {previewItems.map((item) => (
-            <div key={item.title} className="rounded-lg border border-dashed border-border bg-muted p-4">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-background text-info">{item.icon}</span>
-              <h3 className="mt-4 text-sm font-bold text-foreground">{item.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
-            </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {["Landing clarity", "GEO readiness", "Launch operations"].map((item) => (
+            <article key={item} className="rounded-lg border border-border bg-muted p-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <Radar className="h-4 w-4 text-info" aria-hidden="true" />
+                {item}
+              </div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Available now as a report lens. Page-level evidence arrives in Phase 2.
+              </p>
+            </article>
           ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function FixesBoard({ lanes }: { lanes: PreflightFixLane[] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <Badge variant="outline" className="w-fit uppercase">
-              Action board
-            </Badge>
-            <CardTitle className="mt-3">What to fix before launch</CardTitle>
-            <CardDescription>Grouped into a simple board so the next move is obvious.</CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {lanes.map((lane) => (
-            <section key={lane.id} className="rounded-lg border border-border bg-muted p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">{lane.title}</h3>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{lane.description}</p>
-                </div>
-                <Badge variant={priorityVariant(lane.id)}>{lane.id}</Badge>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {lane.fixes.length > 0 ? (
-                  lane.fixes.map((fix, index) => (
-                    <article key={`${fix.issue}-${index}`} className="rounded-md border border-border bg-card p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{fix.area}</Badge>
-                        <Badge variant={priorityVariant(fix.priority)}>{fix.priority}</Badge>
-                      </div>
-                      <h4 className="mt-3 text-sm font-bold leading-5 text-card-foreground">{fix.issue}</h4>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{fix.recommendation}</p>
-                      <p className="mt-2 text-xs leading-5 text-muted-foreground">Evidence: {fix.evidence}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Badge variant="outline">Impact: {fix.impact}</Badge>
-                        <Badge variant="outline">Effort: {fix.effort}</Badge>
-                        <Badge variant="secondary">Owner: {fix.suggestedOwner}</Badge>
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <p className="rounded-md border border-dashed border-border bg-card p-3 text-sm text-muted-foreground">
-                    Nothing urgent in this lane.
-                  </p>
-                )}
-              </div>
-            </section>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function LaunchPack({ result }: { result: PreflightResult }) {
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
-  async function copyMessage(channel: string, headline: string, body: string, index: number) {
-    const key = `${channel}-${index}`;
-
-    try {
-      await navigator.clipboard.writeText(`${headline}\n\n${body}`);
-      setCopiedKey(key);
-    } catch {
-      setCopiedKey(null);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <Badge variant="outline" className="w-fit uppercase">
-          Launch pack
-        </Badge>
-        <CardTitle className="mt-3">Ready-to-use planning output</CardTitle>
-        <CardDescription>Everything from the agent, grouped for a founder or team lead to act on quickly.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 xl:grid-cols-2">
-          <LaunchPackPanel
-            title="Launch path"
-            description="Prioritized work in the order it should happen."
-            icon={<ListChecks className="h-4 w-4" aria-hidden="true" />}
-          >
-            {result.prioritizedPlan.length > 0 ? (
-              <ol className="space-y-3">
-                {result.prioritizedPlan.map((item, index) => (
-                  <li key={`${item.task}-${index}`} className="rounded-md bg-muted p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={priorityVariant(item.priority)}>{item.priority}</Badge>
-                      <span className="text-sm font-bold text-foreground">{item.task}</span>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.rationale}</p>
-                    <p className="mt-2 text-xs font-semibold uppercase text-muted-foreground">Owner: {item.suggestedOwner}</p>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <EmptyState>No prioritized launch path was returned for this run.</EmptyState>
-            )}
-          </LaunchPackPanel>
-
-          <LaunchPackPanel
-            title="Risk radar"
-            description="Known launch risks with practical mitigations."
-            icon={<TriangleAlert className="h-4 w-4" aria-hidden="true" />}
-          >
-            {result.riskRegister.length > 0 ? (
-              <div className="space-y-3">
-                {result.riskRegister.map((item, index) => (
-                  <article key={`${item.risk}-${index}`} className="rounded-md bg-muted p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={severityVariant(item.severity)} className="uppercase">
-                        {item.severity}
-                      </Badge>
-                      <h4 className="text-sm font-bold text-foreground">{item.risk}</h4>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.mitigation}</p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState>No major launch risks were returned for this run.</EmptyState>
-            )}
-          </LaunchPackPanel>
-
-          <LaunchPackPanel
-            title="Owner moves"
-            description="Who should do what next."
-            icon={<CheckSquare className="h-4 w-4" aria-hidden="true" />}
-          >
-            {result.ownerChecklist.length > 0 ? (
-              <div className="space-y-3">
-                {result.ownerChecklist.map((item) => (
-                  <article key={item.owner} className="rounded-md bg-muted p-3">
-                    <h4 className="text-sm font-bold text-foreground">{item.owner}</h4>
-                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      {item.items.map((check) => (
-                        <li key={check} className="flex gap-2">
-                          <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-info" />
-                          <span>{check}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState>No owner checklist was returned for this run.</EmptyState>
-            )}
-          </LaunchPackPanel>
-
-          <LaunchPackPanel
-            title="Message starters"
-            description="Channel-specific launch messages to refine and copy."
-            icon={<CopyIcon className="h-4 w-4" aria-hidden="true" />}
-          >
-            {result.launchCopy.length > 0 ? (
-              <div className="space-y-3">
-                {result.launchCopy.map((item, index) => {
-                  const copyKey = `${item.channel}-${index}`;
-
-                  return (
-                    <article key={copyKey} className="rounded-md bg-muted p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Badge variant="info" className="uppercase">
-                          {item.channel}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            void copyMessage(item.channel, item.headline, item.body, index);
-                          }}
-                        >
-                          <CopyIcon className="h-4 w-4" aria-hidden="true" />
-                          {copiedKey === copyKey ? "Copied" : "Copy"}
-                        </Button>
-                      </div>
-                      <h4 className="mt-3 text-sm font-bold text-foreground">{item.headline}</h4>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
-                    </article>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState>No message starters were returned for this run.</EmptyState>
-            )}
-          </LaunchPackPanel>
-        </div>
-
-        <div className="mt-4 rounded-lg border border-border bg-background p-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-muted text-muted-foreground">
-              <HelpCircle className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Open questions</h3>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">Resolve these to sharpen the next run.</p>
-            </div>
-          </div>
-          {result.followUpQuestions.length > 0 ? (
-            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-              {result.followUpQuestions.map((question) => (
-                <li key={question} className="rounded-md bg-muted px-3 py-2 text-sm text-foreground">
-                  {question}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-sm text-muted-foreground">No critical follow-up questions returned.</p>
-          )}
         </div>
       </CardContent>
     </Card>
@@ -339,15 +48,18 @@ function LaunchPack({ result }: { result: PreflightResult }) {
 
 export function LaunchPlanResult({
   input,
-  result
+  result,
+  isRunning = false
 }: {
   input: PreflightInput | null;
   result: PreflightResult | null;
+  isRunning?: boolean;
 }) {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [activeTab, setActiveTab] = useState<PreflightWorkspaceTabId>("overview");
 
   if (!result) {
-    return <PendingResultPreview />;
+    return <PendingResultPreview isRunning={isRunning} />;
   }
 
   const reportInput: PreflightInput =
@@ -358,8 +70,8 @@ export function LaunchPlanResult({
       constraints: "",
       availableAssets: ""
     };
+  const report = mapPreflightResultToPreflightReport(reportInput, result);
   const generatedResult = result;
-  const report = mapPreflightResultToPreflightReport(reportInput, generatedResult);
   const view = getPreflightReportView(report);
 
   async function copyFullReport() {
@@ -373,34 +85,70 @@ export function LaunchPlanResult({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-bold text-card-foreground">Move this report into your launch workspace</p>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Copy the full report as markdown for docs, issues, or team updates.
-          </p>
-        </div>
-        <div className="flex flex-col items-stretch gap-2 sm:items-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void copyFullReport();
-            }}
-          >
-            <CopyIcon className="h-4 w-4" aria-hidden="true" />
-            {copyStatus === "copied" ? "Copied report" : "Copy report"}
-          </Button>
-          {copyStatus === "failed" ? (
-            <p className="text-xs font-medium text-destructive" role="status">
-              Copy failed. Select the sections below manually.
+      <section className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-soft" aria-label="Report workspace">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="uppercase">
+                Report workspace
+              </Badge>
+              {copyStatus === "copied" ? <Badge variant="success">Copied</Badge> : null}
+            </div>
+            <h2 className="mt-3 text-lg font-bold text-foreground">Move from score to next action</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Score, fixes, assets, and signal notes from this run.
             </p>
-          ) : null}
+          </div>
+
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void copyFullReport();
+              }}
+            >
+              <CopyIcon className="h-4 w-4" aria-hidden="true" />
+              {copyStatus === "copied" ? "Copied report" : "Copy report"}
+            </Button>
+          </div>
         </div>
+
+        {copyStatus === "failed" ? (
+          <p className="mt-3 text-xs font-medium text-destructive" role="status">
+            Copy failed. Select the sections below manually.
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Report sections">
+          {preflightWorkspaceTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-pressed={isActive}
+                className={
+                  isActive
+                    ? "rounded-md bg-primary px-3 py-2 text-sm font-bold text-primary-foreground outline-none ring-ring focus-visible:ring-2"
+                    : "rounded-md border border-border bg-background px-3 py-2 text-sm font-bold text-foreground outline-none ring-ring hover:bg-muted focus-visible:ring-2"
+                }
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <div>
+        {activeTab === "overview" ? <PreflightReportWrapper report={report} /> : null}
+        {activeTab === "fixes" ? <PreflightFixesBoard lanes={view.fixLanes} /> : null}
+        {activeTab === "launchPack" ? <LaunchPack result={result} /> : null}
+        {activeTab === "signals" ? <SignalsPlaceholder /> : null}
       </div>
-      <PreflightReportWrapper report={report} />
-      <FixesBoard lanes={view.fixLanes} />
-      <LaunchPack result={generatedResult} />
     </div>
   );
 }

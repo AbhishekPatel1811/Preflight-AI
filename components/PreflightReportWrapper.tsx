@@ -37,21 +37,9 @@ export function PreflightReportWrapper({ report }: { report: PreflightReport }) 
     <section aria-label={`${PRODUCT_NAME} report overview`}>
       <Card className="overflow-hidden">
         <div className="h-1 bg-[linear-gradient(90deg,var(--primary),var(--info),var(--success))]" />
-        <CardHeader className="gap-5">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl">
-              <Badge variant="outline" className="w-fit uppercase">
-                {PRODUCT_NAME} report
-              </Badge>
-              <CardTitle className="mt-4 text-2xl leading-tight sm:text-3xl">
-                {report.product.name}
-              </CardTitle>
-              <CardDescription className="mt-3 text-base">
-                {report.summary}
-              </CardDescription>
-            </div>
-
-            <div className="w-full rounded-lg border border-border bg-muted p-4 lg:w-56">
+        <CardHeader>
+          <div className="grid gap-5 xl:grid-cols-[0.72fr_1fr_1fr]">
+            <div className="rounded-lg border border-border bg-muted p-4">
               <div className="flex items-center justify-between gap-3">
                 <Badge variant={overallTone}>{scoreLabels[overallTone]}</Badge>
                 <Gauge className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
@@ -64,29 +52,45 @@ export function PreflightReportWrapper({ report }: { report: PreflightReport }) 
                 <div className={`h-2 rounded-full ${meterColor[overallTone]}`} style={{ width: `${report.overallScore}%` }} />
               </div>
             </div>
+
+            <div>
+              <Badge variant="outline" className="w-fit uppercase">
+                {PRODUCT_NAME} report
+              </Badge>
+              <CardTitle className="mt-4 text-2xl leading-tight">
+                {report.product.name}
+              </CardTitle>
+              <CardDescription className="mt-3 text-base">
+                {report.summary}
+              </CardDescription>
+            </div>
+
+            {view.spotlightFix ? (
+              <div className="rounded-lg border border-border bg-background p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-accent-foreground">
+                    <Lightbulb className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <Badge>{view.spotlightFix.priority}</Badge>
+                  <p className="text-sm font-bold text-foreground">{view.spotlightFix.issue}</p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">{view.spotlightFix.recommendation}</p>
+                <p className="mt-3 text-xs font-semibold uppercase text-muted-foreground">
+                  Owner: {view.spotlightFix.suggestedOwner} - Impact: {view.spotlightFix.impact} - Effort: {view.spotlightFix.effort}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                No spotlight fix was returned for this report.
+              </div>
+            )}
           </div>
         </CardHeader>
 
         <CardContent className="space-y-5">
-          {view.spotlightFix ? (
-            <div className="rounded-lg border border-border bg-background p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-accent-foreground">
-                  <Lightbulb className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <Badge>{view.spotlightFix.priority}</Badge>
-                <p className="text-sm font-bold text-foreground">{view.spotlightFix.issue}</p>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">{view.spotlightFix.recommendation}</p>
-              <p className="mt-3 text-xs font-semibold uppercase text-muted-foreground">
-                Owner: {view.spotlightFix.suggestedOwner} - Impact: {view.spotlightFix.impact} - Effort: {view.spotlightFix.effort}
-              </p>
-            </div>
-          ) : null}
-
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {view.moduleCards.map((module) => (
-              <article key={module.id} className="rounded-lg border border-border bg-background p-4">
+              <article key={module.id} className="rounded-lg border border-border bg-background p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-bold text-foreground">{module.label}</h3>
@@ -101,28 +105,35 @@ export function PreflightReportWrapper({ report }: { report: PreflightReport }) 
             ))}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-border bg-muted p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Focus className="h-4 w-4 text-info" aria-hidden="true" />
-                Report source
+          <details className="rounded-lg border border-border bg-muted p-4">
+            <summary className="cursor-pointer list-none text-sm font-bold text-foreground">Report context</summary>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Focus className="h-4 w-4 text-info" aria-hidden="true" />
+                  Report source
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{view.sourceLabel}</p>
               </div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{view.sourceLabel}</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <ScanSearch className="h-4 w-4 text-info" aria-hidden="true" />
-                Next lens
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <ScanSearch className="h-4 w-4 text-info" aria-hidden="true" />
+                  Next lens
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">URL review becomes the next MVP lens after this layout pass.</p>
               </div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">Brief-only analysis for this run. URL review can become a later lens.</p>
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Target className="h-4 w-4 text-info" aria-hidden="true" />
+                  Audience
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {report.product.targetAudience}
+                  {report.product.launchDate ? ` - ${report.product.launchDate}` : ""}
+                </p>
+              </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
-            <Target className="h-4 w-4 text-info" aria-hidden="true" />
-            <span>Audience: {report.product.targetAudience}</span>
-            {report.product.launchDate ? <span>- Launch date: {report.product.launchDate}</span> : null}
-          </div>
+          </details>
         </CardContent>
       </Card>
     </section>

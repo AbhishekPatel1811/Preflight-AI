@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseSseChunk, parseSseFrame } from "../components/PreflightApp";
+import { parseSseChunk, parseSseFrame } from "../lib/ui/sse";
 
 test("parses named SSE frames with CRLF separators", () => {
   const frame = 'event: run_started\r\ndata: {"type":"run_started","message":"Starting"}';

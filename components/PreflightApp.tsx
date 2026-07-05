@@ -1,9 +1,6 @@
 "use client";
 
 import {
-  AlertCircle,
-  ArrowRight,
-  CheckCircle2,
   ClipboardCheck,
   Crosshair,
   Focus,
@@ -12,17 +9,19 @@ import {
 } from "lucide-react";
 import { FormEvent, useMemo, useState, type ReactNode } from "react";
 import type { ZodError } from "zod";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PRODUCT_NAME } from "@/lib/brand";
 import type { PreflightInput, PreflightResult, StreamEvent } from "@/lib/types";
+import { getPreflightWorkspaceState } from "@/lib/ui/preflightLayoutViewModel";
+import { parseSseChunk } from "@/lib/ui/sse";
 import { preflightInputSchema } from "@/lib/validators";
 import { LaunchPlanResult } from "./LaunchPlanResult";
+import { PreflightRunStatus } from "./PreflightRunStatus";
 
 type FieldErrors = Partial<Record<keyof PreflightInput, string>>;
 
@@ -41,24 +40,6 @@ const sampleInput: PreflightInput = {
   constraints: "Small team, no paid ads, limited design assets, need a reliable QA and rollback plan",
   availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn founder post"
 };
-
-export function parseSseFrame(frame: string): StreamEvent | null {
-  const data = frame
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice(5).replace(/^ /, ""))
-    .join("\n");
-
-  return data ? (JSON.parse(data) as StreamEvent) : null;
-}
-
-export function parseSseChunk(buffer: string, chunk: string) {
-  const frames = `${buffer}${chunk}`.split(/\r?\n\r?\n/);
-  const nextBuffer = frames.pop() || "";
-  const events = frames.map(parseSseFrame).filter((event): event is StreamEvent => event !== null);
-
-  return { buffer: nextBuffer, events };
-}
 
 function parseIssues(error: ZodError<PreflightInput>): FieldErrors {
   const fieldErrors: FieldErrors = {};
@@ -161,10 +142,19 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
   const [submittedInput, setSubmittedInput] = useState<PreflightInput | null>(null);
   const [error, setError] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const runState = error ? "error" : isRunning ? "running" : result ? "success" : "idle";
+  const workspaceState = getPreflightWorkspaceState({
+    isRunning,
+    hasResult: Boolean(result),
+    hasError: Boolean(error),
+    hasDraftText: Boolean(text)
+  });
 
   const progressEvents = useMemo(
-    () => events.filter((event) => event.type !== "text_delta" && event.type !== "final"),
+    () =>
+      events.filter(
+        (event): event is Exclude<StreamEvent, { type: "text_delta" | "final" }> =>
+          event.type !== "text_delta" && event.type !== "final"
+      ),
     [events]
   );
   const completedToolCount = useMemo(
@@ -296,8 +286,8 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
     <div
       className={
         embedded
-          ? "grid gap-5 xl:grid-cols-[minmax(320px,0.82fr)_1.18fr]"
-          : "mx-auto grid max-w-7xl gap-5 lg:grid-cols-[minmax(360px,0.82fr)_1.18fr]"
+          ? "grid items-start gap-5 xl:grid-cols-[minmax(320px,0.82fr)_1.18fr]"
+          : "mx-auto grid max-w-7xl items-start gap-5 lg:grid-cols-[minmax(360px,0.82fr)_1.18fr]"
       }
     >
       <Card className="overflow-hidden">
@@ -407,79 +397,18 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
       </Card>
 
       <section className="space-y-5">
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Badge variant="outline">
-                  <ScanSearch className="h-3.5 w-3.5" aria-hidden="true" />
-                  Live preflight
-                </Badge>
-                <CardTitle className="mt-3">Run status</CardTitle>
-                <CardDescription>Tool progress stays here while the final report appears below.</CardDescription>
-              </div>
-              {runState === "running" ? <Loader2 className="h-5 w-5 animate-spin text-info" aria-hidden="true" /> : null}
-              {runState === "error" ? <AlertCircle className="h-5 w-5 text-destructive" aria-hidden="true" /> : null}
-              {runState === "success" ? <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" /> : null}
-              {runState === "idle" ? <ScanSearch className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> : null}
-            </div>
-          </CardHeader>
+        <PreflightRunStatus
+          runState={workspaceState.runState}
+          activeStageId={workspaceState.activeStageId}
+          progressEvents={progressEvents}
+          currentProgressMessage={currentProgressMessage}
+          completedToolCount={completedToolCount}
+          streamedCharacterCount={text.length}
+          draftText={workspaceState.showRawDraft ? text : ""}
+          errorMessage={error}
+        />
 
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{currentProgressMessage}</Badge>
-              {completedToolCount > 0 ? <Badge variant="success">{completedToolCount} tools completed</Badge> : null}
-              {text ? <Badge variant="info">{text.length} streamed characters</Badge> : null}
-            </div>
-
-            {error ? (
-              <Alert variant="destructive" className="flex gap-3">
-                <AlertCircle className="mt-1 h-4 w-4 flex-none" aria-hidden="true" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {progressEvents.length === 0 && !text && !result ? (
-              <div className="rounded-lg border border-dashed border-border bg-muted p-5 text-sm text-muted-foreground">
-                Submit a launch brief to generate the readiness card, fixes board, and launch pack.
-              </div>
-            ) : null}
-
-            {progressEvents.length > 0 ? (
-              <div className="space-y-2">
-                {progressEvents.map((event, index) => (
-                  <div key={`${event.type}-${index}`} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-muted text-muted-foreground">
-                      {event.type === "error" ? <AlertCircle className="h-4 w-4" aria-hidden="true" /> : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
-                    </span>
-                    <span className="font-medium text-foreground">{event.message}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {isRunning && !text && !result ? (
-              <Alert variant="info" className="flex items-center gap-3">
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <AlertDescription>Preparing model stream after local tool progress.</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {text ? (
-              <details className="rounded-lg border border-border bg-background p-4 text-sm">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-bold text-foreground">
-                  <span>Model draft notes</span>
-                  {isRunning && !result ? <Badge variant="info">Streaming</Badge> : null}
-                </summary>
-                <pre className="mt-4 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-foreground p-4 font-mono text-background">
-                  {text}
-                </pre>
-              </details>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <LaunchPlanResult input={submittedInput} result={result} />
+        <LaunchPlanResult input={submittedInput} result={result} isRunning={isRunning} />
       </section>
     </div>
   );
