@@ -28,7 +28,25 @@ Use these Superpowers patterns when relevant:
 - `web-design-guidelines` - checklist after any UI batch.
 - `vercel-composition-patterns` (situational) - boolean-prop bloat, compound/render-prop refactors.
 
-**Available but NOT installed** (install: `npx skills add vercel-labs/agent-skills -g -a claude-code -s <name>`): `vercel-react-view-transitions`, `deploy-to-vercel`, `vercel-cli-with-tokens`, `vercel-optimize`. Not relevant: `vercel-react-native-skills`.
+**Available but NOT installed** (install: `npx.cmd skills add vercel-labs/agent-skills -g -a claude-code -s <name>`): `vercel-react-view-transitions`, `deploy-to-vercel`, `vercel-cli-with-tokens`, `vercel-optimize`. Not relevant: `vercel-react-native-skills`.
+
+**External skills discovery workflow:**
+- Use `https://skills.sh/` and the Skills CLI before assuming a useful skill does not exist.
+- On this Windows PowerShell setup, prefer `npx.cmd skills ...` because `npx.ps1` can be blocked by execution policy.
+- Useful read-only commands:
+  - `npx.cmd skills --help`
+  - `npx.cmd skills find <query>`
+  - `npx.cmd skills add <owner/repo> -l`
+  - `npx.cmd skills list --json`
+- Install only when intentionally adding a project or global skill:
+  - `npx.cmd skills add <owner/repo@skill>`
+  - `npx.cmd skills add <owner/repo> --skill <name>`
+  - `npx.cmd skills update`
+  - `npx.cmd skills init <name>`
+- Current external sources to check:
+  - `obra/superpowers`: canonical Superpowers skill set. `npx.cmd skills add obra/superpowers -l` found 14 skills including `brainstorming`, `systematic-debugging`, `writing-plans`, `subagent-driven-development`, `test-driven-development`, and `verification-before-completion`.
+  - `mattpocock/skills`: engineering/productivity skill set. `npx.cmd skills find grill` found `mattpocock/skills@grill-me`, `grill-with-docs`, and `grilling`; `npx.cmd skills add mattpocock/skills -l` found broader workflow skills such as `code-review`, `improve-codebase-architecture`, `to-prd`, `to-issues`, `triage`, `loop-me`, and `wayfinder`.
+- Use `grill-me` or `grill-with-docs` when a plan/design needs a relentless interview before implementation. Prefer `grill-with-docs` when the interview should produce ADRs, glossary, or other durable docs. Prefer existing Superpowers `brainstorming` when the local installed skill already covers the gate.
 
 - **🟡 GOLDEN RULE - Invoke the right skill BEFORE touching code, not after.** Map: `vercel-react-best-practices` (perf/RSC/routes), `web-design-guidelines` (layout/a11y/polish), `vercel-composition-patterns` (composition), `superpowers:systematic-debugging` (any bug), `shadcn` (`components/ui/`). On EVERY task touching `app/`, `components/`, `hooks/`, `lib/`: ask "which skills apply?" -> load -> then edit. Before wrapping ANY existing component in a new container, check (a) the child's root display (button/anchor/span = intrinsic-width; div = stretches) and (b) the original's layout context - if it was a direct grid/flex item, the wrapper must carry the same stretch classes and a non-block child needs `w-full`. **Dead-code deletions:** check three layers - direct imports of symbol AND filename, sibling `-server.tsx`/`-client.tsx`/`-island.tsx` wrappers, actual JSX bindings (`<X`) not just imports. _Why:_ skipping skills caused repeated user-caught bugs (collapsed grid tile, duplicate dashboards, useEffect update-depth loop, deleted still-used component). If the user catches a UX bug I should have caught, that IS a missed-skill failure - pause, load it, retry.
 - **🟡 GOLDEN RULE part 2 - GROUND TRUTH > MENTAL MODEL.** Before any write that depends on: (a) a third-party API param shape - `WebSearch` the provider docs (SDKs' unified surfaces lie; OpenAI image uses `size` not `aspectRatio`; Polar rejects `.test` emails). (b) a CSS layout primitive - mentally simulate content grow/shrink/empty BEFORE writing the class. (c) a literal value (price, tier name, model label) - grep for an existing canonical constant FIRST and interpolate it. (d) an "X already exists" claim - list/search the canonical inventory first. _Why:_ six user-caught bugs in one session traced to trusting the mental model at write-time. See [memory: feedback-ground-truth-gate].
