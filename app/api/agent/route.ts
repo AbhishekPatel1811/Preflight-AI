@@ -19,7 +19,7 @@ function sseEventName(event: unknown) {
   return typeof type === "string" ? type.replace(/[^a-zA-Z0-9_-]/g, "_") : "message";
 }
 
-export function encodeSseEvent(event: unknown) {
+function encodeSseEvent(event: unknown) {
   return encoder.encode(`event: ${sseEventName(event)}\ndata: ${JSON.stringify(event)}\n\n`);
 }
 
