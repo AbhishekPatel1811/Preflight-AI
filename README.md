@@ -29,6 +29,8 @@ cp .env.example .env.local
 pnpm dev
 ```
 
+The `dev` and `build` scripts run Next.js with webpack. This keeps local Windows runs on the documented compiler path while Turbopack remains disabled for this project.
+
 Add your key to `.env.local`:
 
 ```env
@@ -113,6 +115,8 @@ pnpm test
 pnpm build
 pnpm dev
 ```
+
+`pnpm build` runs `next build --webpack`; `pnpm dev` runs `next dev --webpack`.
 
 Health check:
 
