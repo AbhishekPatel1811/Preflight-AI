@@ -3,25 +3,10 @@ import { runPreflightAgent, streamPreflightAgent } from "@/lib/agents/preflightA
 import { PRODUCT_NAME } from "@/lib/brand";
 import { getServerEnv, MissingOpenAIKeyError } from "@/lib/server/env";
 import { openAIErrorLog, openAIUserMessage } from "@/lib/server/openaiErrors";
+import { encodeSseEvent } from "@/lib/server/sse";
 import { preflightInputSchema } from "@/lib/validators";
 
 export const runtime = "nodejs";
-
-const encoder = new TextEncoder();
-
-function sseEventName(event: unknown) {
-  if (typeof event !== "object" || event === null || !("type" in event)) {
-    return "message";
-  }
-
-  const type = (event as { type?: unknown }).type;
-
-  return typeof type === "string" ? type.replace(/[^a-zA-Z0-9_-]/g, "_") : "message";
-}
-
-function encodeSseEvent(event: unknown) {
-  return encoder.encode(`event: ${sseEventName(event)}\ndata: ${JSON.stringify(event)}\n\n`);
-}
 
 function safeErrorMessage(error: unknown, model = "the configured model") {
   if (error instanceof MissingOpenAIKeyError) {
