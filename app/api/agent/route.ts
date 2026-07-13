@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { runPreflightAgent, streamPreflightAgent } from "@/lib/agents/preflightAgent";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { getServerEnv, MissingOpenAIKeyError } from "@/lib/server/env";
 import { openAIErrorLog, openAIUserMessage } from "@/lib/server/openaiErrors";
+import { jsonNoStore } from "@/lib/server/responses";
 import { encodeSseEvent } from "@/lib/server/sse";
 import { preflightInputSchema } from "@/lib/validators";
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
   const parsed = preflightInputSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
+    return jsonNoStore(
       {
         error: "Invalid launch brief.",
         issues: parsed.error.issues.map((issue) => ({
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     if (request.nextUrl.searchParams.get("mode") === "json") {
       const data = await runPreflightAgent(parsed.data, env);
-      return NextResponse.json({ data });
+      return jsonNoStore({ data });
     }
 
     const stream = new ReadableStream({
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error(`${PRODUCT_NAME} agent request failed`, openAIErrorLog(error));
 
-    return NextResponse.json(
+    return jsonNoStore(
       {
         error: safeErrorMessage(error)
       },
