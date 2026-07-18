@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import type { PreflightInput } from "@/lib/types";
-import type { PageSignals } from "@/lib/types/pageSignals";
+import { pageSignalsSchema, type PageSignals } from "@/lib/types/pageSignals";
 import { fetchPublicTextResource, type PublicFetchInput, type PublicTextResource } from "./publicFetch";
 import { isPublicIpAddress } from "./urlSafety";
 
@@ -36,7 +36,7 @@ export function extractSignalsFromHtml(html: string, options: ExtractOptions): P
 
   $("script, style, noscript, template, svg, [hidden], [aria-hidden='true']").remove();
 
-  return {
+  return parsePageSignals({
     source: options.source,
     status: options.warnings?.length ? "partial" : "success",
     requestedUrl: safeOutputUrl(options.requestedUrl),
@@ -57,7 +57,7 @@ export function extractSignalsFromHtml(html: string, options: ExtractOptions): P
     hasLlmsTxt: false,
     extractedText: truncate(normalizeText($("body").text()), MAX_EXTRACTED_TEXT),
     warnings: safeWarnings(options.warnings ?? [])
-  };
+  });
 }
 
 export async function resolvePageSignals(
@@ -104,24 +104,24 @@ export async function resolvePageSignals(
     warnings: probes.warnings
   });
 
-  return {
+  return parsePageSignals({
     ...signals,
     status: probes.warnings.length ? "partial" : "success",
     hasRobotsTxt: probes.hasRobotsTxt,
     hasSitemap: probes.hasSitemap,
     hasLlmsTxt: probes.hasLlmsTxt,
-    warnings: probes.warnings
-  };
+    warnings: safeWarnings(probes.warnings)
+  });
 }
 
 function buildManualSignals(
   manualPageCopy: string,
   options: { requestedUrl?: string; warnings?: string[] } = {}
 ): PageSignals {
-  return {
+  return parsePageSignals({
     source: "manual",
     status: "partial",
-    requestedUrl: options.requestedUrl,
+    requestedUrl: safeOutputUrl(options.requestedUrl),
     finalUrl: undefined,
     title: "",
     description: "",
@@ -138,16 +138,16 @@ function buildManualSignals(
     hasSitemap: false,
     hasLlmsTxt: false,
     extractedText: truncate(normalizeText(manualPageCopy), MAX_EXTRACTED_TEXT),
-    warnings: dedupe(options.warnings ?? []).slice(0, 10)
-  };
+    warnings: safeWarnings(options.warnings ?? [])
+  });
 }
 
 function buildUnavailableSignals(requestedUrl: string, warning: string): PageSignals {
-  return {
+  return parsePageSignals({
     ...buildManualSignals("", { requestedUrl, warnings: [warning] }),
     source: "url",
     status: "unavailable"
-  };
+  });
 }
 
 async function resolvePageProbes(
@@ -164,10 +164,19 @@ async function resolvePageProbes(
 
   return {
     hasRobotsTxt: robots.ok,
-    hasSitemap: sitemap.ok || (robots.ok && /(^|\n)\s*sitemap\s*:/i.test(robots.text)),
+    hasSitemap: sitemap.ok || (robots.ok && hasValidRobotsSitemapDirective(robots.text)),
     hasLlmsTxt: llms.ok,
     warnings: dedupe([probeWarning(robots), probeWarning(sitemap), probeWarning(llms)].filter(isString)).slice(0, 10)
   };
+}
+
+function hasValidRobotsSitemapDirective(robotsText: string): boolean {
+  return robotsText
+    .split(/\r?\n/)
+    .some((line) => {
+      const match = /^\s*sitemap\s*:\s*(\S+)/i.exec(line);
+      return Boolean(match?.[1] && safeOutputUrl(match[1]));
+    });
 }
 
 async function probeTextResource(
@@ -358,6 +367,10 @@ function safeOutputUrl(value: string | undefined): string | undefined {
 
 function safeWarnings(warnings: string[]): string[] {
   return dedupe(warnings.filter(isKnownWarning)).slice(0, 10);
+}
+
+function parsePageSignals(signals: PageSignals): PageSignals {
+  return pageSignalsSchema.parse(signals);
 }
 
 function isKnownWarning(warning: string): boolean {

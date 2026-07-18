@@ -266,6 +266,17 @@ test("extractSignalsFromHtml enforces caps, sanitizes requestedUrl, and keeps wa
   ]);
 });
 
+test("extractSignalsFromHtml rejects runtime-invalid PageSignals context at the schema boundary", () => {
+  assert.throws(
+    () =>
+      extractSignalsFromHtml("<html><head><title>Runtime boundary</title></head><body>Body</body></html>", {
+        source: "external",
+        finalUrl: "https://example.com/page"
+      } as unknown as Parameters<typeof extractSignalsFromHtml>[1]),
+    /source|invalid/i
+  );
+});
+
 test("resolvePageSignals fetches the page, launches probes in parallel, and passes the caller signal through", async () => {
   const controller = new AbortController();
   const html = "<html lang='en'><head><title>Example</title></head><body><h1>Example</h1></body></html>";
@@ -456,6 +467,80 @@ test("resolvePageSignals falls back to manual copy when the URL fetch fails", as
   assert.equal(result?.language, "");
   assert.equal(result?.extractedText, "<h1>Manual notes</h1> Key proof points for the launch");
   assert.deepEqual(result?.warnings, [TIMEOUT_WARNING]);
+});
+
+test("resolvePageSignals sanitizes unsafe requestedUrl evidence on manual fallback", async () => {
+  const unsafeUrl = `https://example.com/${"a".repeat(2050)}`;
+
+  const result = await resolvePageSignals(
+    createInput({
+      productUrl: unsafeUrl,
+      manualPageCopy: "Manual notes should still be available."
+    }),
+    {
+      fetchResource: async () => {
+        throw new Error("Public fetch failed before receiving a safe response from 10.0.0.4.");
+      }
+    }
+  );
+
+  assert.equal(result?.source, "manual");
+  assert.equal(result?.status, "partial");
+  assert.equal(result?.requestedUrl, undefined);
+  assert.equal(result?.extractedText, "Manual notes should still be available.");
+  assert.deepEqual(result?.warnings, [PUBLIC_WARNING]);
+});
+
+test("resolvePageSignals only trusts syntactically safe HTTP sitemap directives from robots.txt", async () => {
+  const cases: Array<{ name: string; robotsText: string; expected: boolean }> = [
+    {
+      name: "valid https sitemap",
+      robotsText: "User-agent: *\nSitemap: https://example.com/sitemap-generated.xml",
+      expected: true
+    },
+    {
+      name: "invalid URL",
+      robotsText: "User-agent: *\nSitemap: not a url",
+      expected: false
+    },
+    {
+      name: "custom scheme",
+      robotsText: "User-agent: *\nSitemap: file:///etc/passwd",
+      expected: false
+    },
+    {
+      name: "private IP",
+      robotsText: "User-agent: *\nSitemap: http://10.0.0.4/sitemap.xml",
+      expected: false
+    },
+    {
+      name: "localhost",
+      robotsText: "User-agent: *\nSitemap: https://localhost/sitemap.xml",
+      expected: false
+    }
+  ];
+
+  for (const entry of cases) {
+    const result = await resolvePageSignals(createInput(), {
+      fetchResource: async (input) => {
+        if (input.url === "https://example.com/product") {
+          return createTextResource(
+            input.url,
+            "<html><head><title>Example</title></head><body><h1>Example</h1></body></html>"
+          );
+        }
+
+        if (input.url === "https://example.com/robots.txt") {
+          return createTextResource(input.url, entry.robotsText, "text/plain");
+        }
+
+        throw new Error("Public fetch failed before receiving a safe response.");
+      }
+    });
+
+    assert.equal(result?.hasRobotsTxt, true, entry.name);
+    assert.equal(result?.hasSitemap, entry.expected, entry.name);
+  }
 });
 
 test("resolvePageSignals returns safe unavailable warnings for URL failures without manual copy", async () => {
