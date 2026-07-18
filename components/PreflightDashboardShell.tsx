@@ -32,11 +32,13 @@ export function PreflightDashboardShell({
   onRerun: () => void;
 }) {
   const fallbackInput: PreflightInput = input ?? {
+    productUrl: "",
     productBrief: "Launch project",
     audience: "Not specified",
     launchDate: "",
     constraints: "",
-    availableAssets: ""
+    availableAssets: "",
+    manualPageCopy: ""
   };
   const report = mapPreflightResultToPreflightReport(fallbackInput, result);
 

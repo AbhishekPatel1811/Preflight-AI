@@ -52,6 +52,6 @@ export const draftLaunchCopyTool = tool({
   }),
   async execute(input) {
     // Deterministic copy starter; the agent can refine tone and specificity.
-    return draftLaunchCopy(input);
+    return draftLaunchCopy({ ...input, productUrl: "", manualPageCopy: "" });
   }
 });

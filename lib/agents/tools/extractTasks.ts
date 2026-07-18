@@ -82,6 +82,6 @@ export const extractTasksTool = tool({
   }),
   async execute(input) {
     // Deterministic local planning helper; no external services are called.
-    return extractTasksFromBrief(input);
+    return extractTasksFromBrief({ ...input, productUrl: "", manualPageCopy: "" });
   }
 });

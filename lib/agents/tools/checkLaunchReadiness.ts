@@ -58,6 +58,6 @@ export const checkLaunchReadinessTool = tool({
   }),
   async execute(input) {
     // Deterministic rubric scorer used to anchor the model's risk assessment.
-    return checkLaunchReadiness(input);
+    return checkLaunchReadiness({ ...input, productUrl: "", manualPageCopy: "" });
   }
 });

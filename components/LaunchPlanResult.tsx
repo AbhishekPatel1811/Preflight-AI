@@ -64,11 +64,13 @@ export function LaunchPlanResult({
 
   const reportInput: PreflightInput =
     input ?? {
+      productUrl: "",
       productBrief: "Launch project",
       audience: "Not specified",
       launchDate: "",
       constraints: "",
-      availableAssets: ""
+      availableAssets: "",
+      manualPageCopy: ""
     };
   const report = mapPreflightResultToPreflightReport(reportInput, result);
   const generatedResult = result;

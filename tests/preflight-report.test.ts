@@ -3,11 +3,13 @@ import test from "node:test";
 import type { PreflightInput, PreflightResult } from "../lib/types";
 
 const input: PreflightInput = {
+  productUrl: "",
   productBrief: "We are launching an AI code review assistant for small engineering teams.",
   audience: "Startup CTOs and engineering leads",
   launchDate: "2026-07-15",
   constraints: "Small team, no paid ads, limited design assets, need a reliable QA and rollback plan",
-  availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn founder post"
+  availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn founder post",
+  manualPageCopy: ""
 };
 
 const result: PreflightResult = {

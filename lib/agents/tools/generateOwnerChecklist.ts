@@ -58,6 +58,6 @@ export const generateOwnerChecklistTool = tool({
   }),
   async execute(input) {
     // Deterministic owner checklist generator for launch planning handoffs.
-    return generateOwnerChecklist(input);
+    return generateOwnerChecklist({ ...input, productUrl: "", manualPageCopy: "" });
   }
 });

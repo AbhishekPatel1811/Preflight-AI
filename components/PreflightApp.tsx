@@ -19,19 +19,23 @@ type FieldErrors = Partial<Record<keyof PreflightInput, string>>;
 type ProgressEvent = Exclude<StreamEvent, { type: "text_delta" | "final" }>;
 
 const initialInput: PreflightInput = {
+  productUrl: "",
   productBrief: "",
   audience: "",
   launchDate: "",
   constraints: "",
-  availableAssets: ""
+  availableAssets: "",
+  manualPageCopy: ""
 };
 
 const sampleInput: PreflightInput = {
+  productUrl: "",
   productBrief: "We are launching an AI code review assistant for small engineering teams.",
   audience: "Startup CTOs and engineering leads",
   launchDate: "2026-07-15",
   constraints: "Small team, no paid ads, limited design assets, need a reliable QA and rollback plan",
-  availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn founder post"
+  availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn founder post",
+  manualPageCopy: ""
 };
 
 function parseIssues(error: ZodError<PreflightInput>): FieldErrors {

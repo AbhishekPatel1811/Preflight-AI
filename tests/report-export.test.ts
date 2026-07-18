@@ -4,11 +4,13 @@ import { formatPreflightReportMarkdown } from "../lib/reportExport";
 import type { PreflightInput, PreflightResult } from "../lib/types";
 
 const input: PreflightInput = {
+  productUrl: "",
   productBrief: "We are launching an AI code review assistant for small engineering teams.",
   audience: "Startup CTOs and engineering leads",
   launchDate: "2026-07-15",
   constraints: "Small team, no paid ads, limited design assets",
-  availableAssets: "Landing page draft, product demo video"
+  availableAssets: "Landing page draft, product demo video",
+  manualPageCopy: ""
 };
 
 const result: PreflightResult = {

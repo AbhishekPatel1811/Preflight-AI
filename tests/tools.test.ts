@@ -7,11 +7,13 @@ import { generateOwnerChecklist } from "../lib/agents/tools/generateOwnerCheckli
 import { preflightInputSchema } from "../lib/validators";
 
 const input = {
+  productUrl: "",
   productBrief: "We are launching an AI code review assistant for small engineering teams with inline pull request feedback.",
   audience: "Startup CTOs and engineering leads",
   launchDate: "2026-07-15",
   constraints: "Small team, no paid ads, limited design assets, QA and rollback must be ready",
-  availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn post"
+  availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn post",
+  manualPageCopy: ""
 };
 
 test("validates a usable launch brief", () => {

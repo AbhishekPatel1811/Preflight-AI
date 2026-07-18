@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { pageSignalsSchema } from "./types/pageSignals";
 
-export const preflightResultSchema = z.object({
+export const preflightCoreResultSchema = z.object({
   summary: z.string(),
   prioritizedPlan: z.array(
     z.object({
@@ -33,14 +34,21 @@ export const preflightResultSchema = z.object({
   followUpQuestions: z.array(z.string())
 });
 
+export const preflightResultSchema = preflightCoreResultSchema.extend({
+  pageSignals: pageSignalsSchema.optional()
+});
+
+export type PreflightCoreResult = z.infer<typeof preflightCoreResultSchema>;
 export type PreflightResult = z.infer<typeof preflightResultSchema>;
 
 export type PreflightInput = {
+  productUrl: string;
   productBrief: string;
   audience: string;
   launchDate: string;
   constraints: string;
   availableAssets: string;
+  manualPageCopy: string;
 };
 
 export type StreamEvent =
