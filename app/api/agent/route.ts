@@ -17,6 +17,14 @@ function safeErrorMessage(error: unknown, model = "the configured model") {
   return openAIUserMessage(error, model);
 }
 
+function isAbortLike(error: unknown, signal: AbortSignal) {
+  if (signal.aborted) {
+    return true;
+  }
+
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = preflightInputSchema.safeParse(body);
@@ -38,27 +46,70 @@ export async function POST(request: NextRequest) {
     const env = getServerEnv();
 
     if (request.nextUrl.searchParams.get("mode") === "json") {
-      const data = await runPreflightAgent(parsed.data, env);
+      const data = await runPreflightAgent(parsed.data, env, { signal: request.signal });
       return jsonNoStore({ data });
     }
 
+    let cancelled = false;
+    let closed = false;
+    const markCancelled = () => {
+      cancelled = true;
+    };
+    request.signal.addEventListener("abort", markCancelled, { once: true });
+
     const stream = new ReadableStream({
       async start(controller) {
-        try {
-          for await (const event of streamPreflightAgent(parsed.data, env)) {
+        const enqueue = (event: Parameters<typeof encodeSseEvent>[0]) => {
+          if (cancelled || closed || request.signal.aborted) {
+            return false;
+          }
+
+          try {
             controller.enqueue(encodeSseEvent(event));
+            return true;
+          } catch {
+            cancelled = true;
+            return false;
+          }
+        };
+
+        const close = () => {
+          if (closed || cancelled) {
+            return;
+          }
+
+          try {
+            controller.close();
+          } catch {
+            cancelled = true;
+          } finally {
+            closed = true;
+          }
+        };
+
+        try {
+          for await (const event of streamPreflightAgent(parsed.data, env, { signal: request.signal })) {
+            if (!enqueue(event)) {
+              break;
+            }
           }
         } catch (error) {
+          if (isAbortLike(error, request.signal) || cancelled) {
+            return;
+          }
+
           console.error(`${PRODUCT_NAME} agent stream failed`, openAIErrorLog(error));
-          controller.enqueue(
-            encodeSseEvent({
-              type: "error",
-              message: safeErrorMessage(error, env.model)
-            })
-          );
+          enqueue({
+            type: "error",
+            message: safeErrorMessage(error, env.model)
+          });
         } finally {
-          controller.close();
+          request.signal.removeEventListener("abort", markCancelled);
+          close();
         }
+      },
+      cancel() {
+        cancelled = true;
       }
     });
 
