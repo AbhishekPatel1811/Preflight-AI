@@ -1,41 +1,46 @@
 import { z } from "zod";
 import { pageSignalsSchema } from "./types/pageSignals";
+import { landingLensAssessmentSchema, landingRecommendationsSchema } from "./types/landingLens";
+
+const resultText = (max: number) => z.string().max(max);
 
 export const preflightCoreResultSchema = z.object({
-  summary: z.string(),
+  summary: resultText(4000),
   prioritizedPlan: z.array(
     z.object({
       priority: z.enum(["P0", "P1", "P2"]),
-      task: z.string(),
-      rationale: z.string(),
-      suggestedOwner: z.string()
+      task: resultText(1000),
+      rationale: resultText(4000),
+      suggestedOwner: resultText(500)
     })
-  ),
+  ).max(30),
   riskRegister: z.array(
     z.object({
-      risk: z.string(),
+      risk: resultText(1000),
       severity: z.enum(["low", "medium", "high"]),
-      mitigation: z.string()
+      mitigation: resultText(4000)
     })
-  ),
+  ).max(30),
   ownerChecklist: z.array(
     z.object({
-      owner: z.string(),
-      items: z.array(z.string())
+      owner: resultText(500),
+      items: z.array(resultText(1000)).max(50)
     })
-  ),
+  ).max(30),
   launchCopy: z.array(
     z.object({
-      channel: z.string(),
-      headline: z.string(),
-      body: z.string()
+      channel: resultText(200),
+      headline: resultText(1000),
+      body: resultText(8000)
     })
-  ),
-  followUpQuestions: z.array(z.string())
+  ).max(20),
+  landingRecommendations: landingRecommendationsSchema,
+  followUpQuestions: z.array(resultText(2000)).max(30)
 });
 
 export const preflightResultSchema = preflightCoreResultSchema.extend({
-  pageSignals: pageSignalsSchema.optional()
+  pageSignals: pageSignalsSchema.optional(),
+  landingLens: landingLensAssessmentSchema.optional()
 });
 
 export type PreflightCoreResult = z.infer<typeof preflightCoreResultSchema>;

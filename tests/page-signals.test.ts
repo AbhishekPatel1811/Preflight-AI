@@ -50,6 +50,7 @@ const TIMEOUT_WARNING = "The page could not be reached within the time limit.";
 const UNSUPPORTED_WARNING = "The page returned an unsupported content type.";
 const SIZE_WARNING = "The page response was larger than the audit limit.";
 const PUBLIC_WARNING = "The URL is not available for public auditing.";
+const PROBE_WARNING = "Some supporting files could not be inspected.";
 
 test("extractSignalsFromHtml normalizes, deduplicates, and bounds HTML signals", () => {
   const html = `<!doctype html>
@@ -605,7 +606,7 @@ test("resolvePageSignals keeps successful HTML extraction when probes fail and d
   assert.equal(result?.hasRobotsTxt, false);
   assert.equal(result?.hasSitemap, false);
   assert.equal(result?.hasLlmsTxt, false);
-  assert.deepEqual(result?.warnings, [TIMEOUT_WARNING]);
+  assert.deepEqual(result?.warnings, [PROBE_WARNING]);
   assert.ok((result?.warnings.length ?? 0) <= 10);
 });
 

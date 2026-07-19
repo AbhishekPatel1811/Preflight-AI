@@ -7,10 +7,11 @@ import type { PreflightInput, PreflightResult, StreamEvent } from "@/lib/types";
 import {
   derivePreflightFlowState,
   derivePreflightProgress,
-  isActivePreflightRun
+  isActivePreflightRun,
+  type PreflightProgressEventDescriptor
 } from "@/lib/ui/preflightFlowViewModel";
 import { parseSseChunk } from "@/lib/ui/sse";
-import { preflightInputSchema } from "@/lib/validators";
+import { getLaunchDateInputValue, preflightInputSchema } from "@/lib/validators";
 import { PreflightBriefStep } from "./PreflightBriefStep";
 import { PreflightDashboardShell } from "./PreflightDashboardShell";
 import { PreflightLiveRunStep } from "./PreflightLiveRunStep";
@@ -28,15 +29,17 @@ const initialInput: PreflightInput = {
   manualPageCopy: ""
 };
 
-const sampleInput: PreflightInput = {
-  productUrl: "",
-  productBrief: "We are launching an AI code review assistant for small engineering teams.",
-  audience: "Startup CTOs and engineering leads",
-  launchDate: "2026-07-15",
-  constraints: "Small team, no paid ads, limited design assets, need a reliable QA and rollback plan",
-  availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn founder post",
-  manualPageCopy: ""
-};
+function getSampleInput(): PreflightInput {
+  return {
+    productUrl: "https://example.com",
+    productBrief: "We are launching an AI code review assistant for small engineering teams.",
+    audience: "Startup CTOs and engineering leads",
+    launchDate: getLaunchDateInputValue(14),
+    constraints: "Small team, no paid ads, limited design assets, need a reliable QA and rollback plan",
+    availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn founder post",
+    manualPageCopy: ""
+  };
+}
 
 function parseIssues(error: ZodError<PreflightInput>): FieldErrors {
   const fieldErrors: FieldErrors = {};
@@ -49,8 +52,32 @@ function parseIssues(error: ZodError<PreflightInput>): FieldErrors {
   return fieldErrors;
 }
 
+function focusFirstInvalidField(error: ZodError<PreflightInput>) {
+  const field = error.issues.find((issue) => typeof issue.path[0] === "string")?.path[0];
+
+  if (typeof field !== "string") {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    document.getElementById(field)?.focus();
+  });
+}
+
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function toProgressEventDescriptor(event: StreamEvent): PreflightProgressEventDescriptor | null {
+  if (event.type === "run_started" || event.type === "final") {
+    return { type: event.type };
+  }
+
+  if (event.type === "tool_started" || event.type === "tool_completed") {
+    return { type: event.type, toolName: event.toolName };
+  }
+
+  return null;
 }
 
 export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) {
@@ -83,14 +110,25 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
       ),
     [events]
   );
+  const progressEventDescriptors = useMemo<PreflightProgressEventDescriptor[]>(() => {
+    const descriptors = events
+      .map(toProgressEventDescriptor)
+      .filter((event): event is PreflightProgressEventDescriptor => event !== null);
+
+    if (text) {
+      descriptors.push({ type: "text_delta" });
+    }
+
+    return descriptors;
+  }, [events, text]);
   const progress = useMemo(
     () =>
       derivePreflightProgress({
-        eventTypes: events.map((event) => event.type),
+        eventDescriptors: progressEventDescriptors,
         hasDraftText: Boolean(text),
         hasResult: Boolean(result)
       }),
-    [events, result, text]
+    [progressEventDescriptors, result, text]
   );
   const completedToolCount = useMemo(
     () => progressEvents.filter((event) => event.type === "tool_completed").length,
@@ -138,7 +176,7 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
   }
 
   function loadSampleInput() {
-    setInput(sampleInput);
+    setInput(getSampleInput());
     setErrors({});
     setSubmittedInput(null);
     clearRunOutput();
@@ -231,35 +269,51 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-
-        if (!isCurrentRun()) {
-          return;
+      let receivedFinal = false;
+      const applyRunEvent = (nextEvent: StreamEvent) => {
+        if (nextEvent.type === "final") {
+          receivedFinal = true;
         }
 
-        if (done) {
-          const tail = decoder.decode();
+        applyStreamEvent(nextEvent);
+      };
 
-          if (tail) {
-            const parsedTail = parseSseChunk(buffer, tail);
-            buffer = parsedTail.buffer;
-            parsedTail.events.forEach(applyStreamEvent);
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+
+          if (!isCurrentRun()) {
+            return;
           }
 
-          if (buffer.trim()) {
-            const parsedRemainder = parseSseChunk("", `${buffer}\n\n`);
-            buffer = parsedRemainder.buffer;
-            parsedRemainder.events.forEach(applyStreamEvent);
+          if (done) {
+            const tail = decoder.decode();
+
+            if (tail) {
+              const parsedTail = parseSseChunk(buffer, tail);
+              buffer = parsedTail.buffer;
+              parsedTail.events.forEach(applyRunEvent);
+            }
+
+            if (buffer.trim()) {
+              const parsedRemainder = parseSseChunk("", `${buffer}\n\n`);
+              buffer = parsedRemainder.buffer;
+              parsedRemainder.events.forEach(applyRunEvent);
+            }
+
+            break;
           }
 
-          break;
+          const parsedChunk = parseSseChunk(buffer, decoder.decode(value, { stream: true }));
+          buffer = parsedChunk.buffer;
+          parsedChunk.events.forEach(applyRunEvent);
         }
+      } finally {
+        reader.releaseLock();
+      }
 
-        const parsedChunk = parseSseChunk(buffer, decoder.decode(value, { stream: true }));
-        buffer = parsedChunk.buffer;
-        parsedChunk.events.forEach(applyStreamEvent);
+      if (!receivedFinal) {
+        throw new Error("The run ended before the final report was received.");
       }
     } catch (runError) {
       if (!isCurrentRun()) {
@@ -288,6 +342,7 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
 
     if (!parsed.success) {
       setErrors(parseIssues(parsed.error));
+      focusFirstInvalidField(parsed.error);
       return;
     }
 
@@ -301,7 +356,9 @@ export function PreflightApp({ embedded = false }: { embedded?: boolean } = {}) 
     if (!parsed.success) {
       setInput(nextInput);
       setErrors(parseIssues(parsed.error));
+      setError("");
       setWasCancelled(false);
+      focusFirstInvalidField(parsed.error);
       return;
     }
 

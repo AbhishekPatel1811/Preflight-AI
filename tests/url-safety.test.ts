@@ -591,6 +591,24 @@ test("fetchPublicTextResource aborts when the internal timeout fires", async () 
   );
 });
 
+test("fetchPublicTextResource times out while DNS lookup is unresolved", async () => {
+  const lookup: LookupFn = async () => new Promise<LookupAddress[]>(() => undefined);
+  const operation = fetchPublicTextResource(
+    {
+      url: "https://example.com/start",
+      timeoutMs: 10,
+      maxBytes: 1024,
+      acceptedContentTypes: ["text/html"]
+    },
+    { lookup }
+  );
+  const guard = new Promise<never>((_resolve, reject) => {
+    setTimeout(() => reject(new Error("DNS timeout regression test guard elapsed.")), 100);
+  });
+
+  await assert.rejects(Promise.race([operation, guard]), /Public fetch timed out after 10ms/);
+});
+
 test("fetchPublicTextResource honors caller abort signals", async () => {
   const lookup = createLookup({
     "example.com": [{ address: "93.184.216.34", family: 4 }]

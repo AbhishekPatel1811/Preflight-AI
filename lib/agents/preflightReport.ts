@@ -1,5 +1,6 @@
 import type { PreflightInput, PreflightResult } from "@/lib/types";
 import type { PageSignals } from "@/lib/types/pageSignals";
+import type { LandingLensAssessment, LandingLensCriterionId } from "@/lib/types/landingLens";
 import type { LaunchArtifact, LaunchDiagnostic, LaunchFix, PreflightModuleScores, PreflightReport } from "@/lib/types/preflight";
 
 const PHASE_ONE_OVERALL_SCORE = 72;
@@ -61,6 +62,23 @@ function mapPlanToFixes(result: PreflightResult): LaunchFix[] {
   }));
 }
 
+function mapLandingFixes(landingLens: LandingLensAssessment | undefined): LaunchFix[] {
+  return (landingLens?.fixes ?? []).map((fix) => ({
+    priority: fix.priority,
+    area: fix.area,
+    issue: fix.issue,
+    evidence: fix.evidence,
+    recommendation: fix.recommendation,
+    effort: fix.effort,
+    impact: fix.impact,
+    suggestedOwner: fix.suggestedOwner
+  }));
+}
+
+function mapTopFixes(result: PreflightResult) {
+  return [...mapLandingFixes(result.landingLens), ...mapPlanToFixes(result)].slice(0, 10);
+}
+
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -105,6 +123,28 @@ function scoreTrust(signals: PageSignals) {
   return scoreByCoverage(Math.min(countTrustSurfaceLinks(signals), 3), 3);
 }
 
+function landingCriterionScore(landingLens: LandingLensAssessment, id: LandingLensCriterionId) {
+  return landingLens.criteria.find((criterion) => criterion.id === id)?.score ?? 0;
+}
+
+function scoreLandingPositioning(landingLens: LandingLensAssessment) {
+  return clampScore(
+    (landingCriterionScore(landingLens, "heroClarity") * 20 +
+      landingCriterionScore(landingLens, "icpClarity") * 15 +
+      landingCriterionScore(landingLens, "problemPromise") * 15 +
+      landingCriterionScore(landingLens, "differentiation") * 10) /
+      60
+  );
+}
+
+function scoreLandingConversion(landingLens: LandingLensAssessment) {
+  return clampScore(
+    (landingCriterionScore(landingLens, "ctaStrength") * 15 +
+      landingCriterionScore(landingLens, "objectionHandling") * 10) /
+      25
+  );
+}
+
 function scoreGeoReadiness(signals: PageSignals) {
   return scoreByCoverage(
     countObserved([
@@ -119,11 +159,14 @@ function scoreGeoReadiness(signals: PageSignals) {
   );
 }
 
-function calculateSignalAwareScores(signals: PageSignals): PreflightModuleScores {
+function calculateSignalAwareScores(result: PreflightResult): PreflightModuleScores {
+  const signals = result.pageSignals!;
+  const scoredLandingLens = result.landingLens?.score !== null ? result.landingLens : undefined;
+
   return {
-    positioning: scorePositioning(signals),
-    conversion: scoreConversion(signals),
-    trust: scoreTrust(signals),
+    positioning: scoredLandingLens ? scoreLandingPositioning(scoredLandingLens) : scorePositioning(signals),
+    conversion: scoredLandingLens ? scoreLandingConversion(scoredLandingLens) : scoreConversion(signals),
+    trust: scoredLandingLens ? landingCriterionScore(scoredLandingLens, "trustProof") : scoreTrust(signals),
     demoClarity: PHASE_ONE_MODULE_SCORES.demoClarity,
     geoReadiness: scoreGeoReadiness(signals),
     launchOps: PHASE_ONE_MODULE_SCORES.launchOps
@@ -279,6 +322,16 @@ function mapRiskDiagnostics(result: PreflightResult): LaunchDiagnostic[] {
   }));
 }
 
+function mapLandingDiagnostics(landingLens: LandingLensAssessment): LaunchDiagnostic[] {
+  return landingLens.criteria.map((criterion) => ({
+    module: "Landing Lens",
+    score: criterion.score ?? undefined,
+    title: criterion.label,
+    evidence: criterion.evidence,
+    recommendation: criterion.recommendation
+  }));
+}
+
 function mapDiagnostics(result: PreflightResult, moduleScores: PreflightModuleScores): LaunchDiagnostic[] {
   const signals = result.pageSignals;
 
@@ -289,10 +342,14 @@ function mapDiagnostics(result: PreflightResult, moduleScores: PreflightModuleSc
   return [
     getCoreDiagnostic(moduleScores, result),
     ...getSignalStatusDiagnostics(signals),
-    getTitleDiagnostic(signals, moduleScores),
-    getH1Diagnostic(signals, moduleScores),
-    getCtaDiagnostic(signals, moduleScores),
-    getTrustDiagnostic(signals, moduleScores),
+    ...(result.landingLens
+      ? mapLandingDiagnostics(result.landingLens)
+      : [
+          getTitleDiagnostic(signals, moduleScores),
+          getH1Diagnostic(signals, moduleScores),
+          getCtaDiagnostic(signals, moduleScores),
+          getTrustDiagnostic(signals, moduleScores)
+        ]),
     getMetadataDiagnostic(signals, moduleScores),
     getCrawlFileDiagnostic(signals, moduleScores),
     ...mapRiskDiagnostics(result)
@@ -318,13 +375,30 @@ function mapArtifacts(result: PreflightResult): LaunchArtifact[] {
       title: "Prioritized launch plan",
       content: result.prioritizedPlan.map((item) => `${item.priority}: ${item.task}`).join("\n")
     },
+    {
+      type: "hero_rewrite",
+      title: "Landing page hero upgrade",
+      content: [
+        result.landingRecommendations.heroHeadline,
+        result.landingRecommendations.heroSupportingCopy,
+        `Primary CTA: ${result.landingRecommendations.primaryCta}`,
+        result.landingRecommendations.ctaRationale
+      ].join("\n")
+    },
     ...launchCopyArtifacts,
     ...checklistArtifacts
   ];
 }
 
 export function mapPreflightResultToPreflightReport(input: PreflightInput, result: PreflightResult): PreflightReport {
-  const moduleScores = result.pageSignals ? calculateSignalAwareScores(result.pageSignals) : PHASE_ONE_MODULE_SCORES;
+  const moduleScores = result.pageSignals
+    ? result.landingLens?.status === "unavailable"
+      ? {
+          ...PHASE_ONE_MODULE_SCORES,
+          geoReadiness: scoreGeoReadiness(result.pageSignals)
+        }
+      : calculateSignalAwareScores(result)
+    : PHASE_ONE_MODULE_SCORES;
   const overallScore = result.pageSignals ? calculateOverallScore(moduleScores) : PHASE_ONE_OVERALL_SCORE;
 
   return {
@@ -339,8 +413,9 @@ export function mapPreflightResultToPreflightReport(input: PreflightInput, resul
     },
     overallScore,
     moduleScores,
+    landingLens: result.landingLens,
     summary: result.summary,
-    topFixes: mapPlanToFixes(result),
+    topFixes: mapTopFixes(result),
     diagnostics: mapDiagnostics(result, moduleScores),
     artifacts: mapArtifacts(result),
     followUpQuestions: result.followUpQuestions

@@ -1,13 +1,18 @@
+import "server-only";
 import { NextRequest } from "next/server";
 import { runPreflightAgent, streamPreflightAgent } from "@/lib/agents/preflightAgent";
 import { PRODUCT_NAME } from "@/lib/brand";
+import { agentRequestErrorResponse, createAgentRunSignal, isRequestAbort } from "@/lib/server/agentRouteControl";
 import { getServerEnv, MissingOpenAIKeyError } from "@/lib/server/env";
 import { openAIErrorLog, openAIUserMessage } from "@/lib/server/openaiErrors";
+import { readBoundedJson, RequestBodyTooLargeError } from "@/lib/server/requestBody";
 import { jsonNoStore } from "@/lib/server/responses";
 import { encodeSseEvent } from "@/lib/server/sse";
 import { preflightInputSchema } from "@/lib/validators";
 
 export const runtime = "nodejs";
+const MAX_REQUEST_BYTES = 64 * 1024;
+const AGENT_RUN_TIMEOUT_MS = 2 * 60 * 1000;
 
 function safeErrorMessage(error: unknown, model = "the configured model") {
   if (error instanceof MissingOpenAIKeyError) {
@@ -17,16 +22,16 @@ function safeErrorMessage(error: unknown, model = "the configured model") {
   return openAIUserMessage(error, model);
 }
 
-function isAbortLike(error: unknown, signal: AbortSignal) {
-  if (signal.aborted) {
-    return true;
+export async function POST(request: NextRequest) {
+  let body: unknown = null;
+  try {
+    body = await readBoundedJson(request, MAX_REQUEST_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return jsonNoStore({ error: "Launch brief is too large." }, { status: 413 });
+    }
   }
 
-  return error instanceof DOMException && error.name === "AbortError";
-}
-
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
   const parsed = preflightInputSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -44,9 +49,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const env = getServerEnv();
+    const runSignal = createAgentRunSignal(request.signal, AGENT_RUN_TIMEOUT_MS);
 
     if (request.nextUrl.searchParams.get("mode") === "json") {
-      const data = await runPreflightAgent(parsed.data, env, { signal: request.signal });
+      const data = await runPreflightAgent(parsed.data, env, { signal: runSignal });
       return jsonNoStore({ data });
     }
 
@@ -88,13 +94,13 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          for await (const event of streamPreflightAgent(parsed.data, env, { signal: request.signal })) {
+          for await (const event of streamPreflightAgent(parsed.data, env, { signal: runSignal })) {
             if (!enqueue(event)) {
               break;
             }
           }
         } catch (error) {
-          if (isAbortLike(error, request.signal) || cancelled) {
+          if (isRequestAbort(error, request.signal) || cancelled) {
             return;
           }
 
@@ -122,13 +128,17 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
+    const response = agentRequestErrorResponse(error, request.signal, "the configured model");
+
+    if (response.status === 499) {
+      return jsonNoStore(response.body, { status: response.status });
+    }
+
     console.error(`${PRODUCT_NAME} agent request failed`, openAIErrorLog(error));
 
     return jsonNoStore(
-      {
-        error: safeErrorMessage(error)
-      },
-      { status: error instanceof MissingOpenAIKeyError ? 500 : 502 }
+      error instanceof MissingOpenAIKeyError ? { error: safeErrorMessage(error) } : response.body,
+      { status: error instanceof MissingOpenAIKeyError ? 500 : response.status }
     );
   }
 }

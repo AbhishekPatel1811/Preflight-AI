@@ -4,8 +4,7 @@ export const navItems = [
   { label: "Problem", href: "#problem" },
   { label: "Workflow", href: "#workflow" },
   { label: "Report", href: "#outputs" },
-  { label: "Under the hood", href: "#lens-engine" },
-  { label: "Demo", href: "#demo" }
+  { label: "Under the hood", href: "#lens-engine" }
 ];
 
 export const heroEvents = [
@@ -39,7 +38,7 @@ export const workflowSteps = [
   {
     eyebrow: "01",
     title: "Guide the preflight",
-    body: "Paste the product brief, audience, launch date, constraints, and assets into a short guided brief."
+    body: "Add the public product URL, launch goal, audience, launch date, constraints, and available assets in one guided brief."
   },
   {
     eyebrow: "02",

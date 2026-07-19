@@ -17,7 +17,13 @@ const rubric = [
   { area: "support readiness", test: (input: PreflightInput) => /support|faq|docs|help/i.test(input.constraints + input.availableAssets) },
   { area: "launch channel readiness", test: (input: PreflightInput) => /email|linkedin|product hunt|landing|in-app|x\b|changelog/i.test(input.availableAssets + input.constraints) },
   { area: "risk preparedness", test: (input: PreflightInput) => /risk|constraint|limited|small team|no paid|approval/i.test(input.constraints) },
-  { area: "schedule realism", test: (input: PreflightInput) => (daysUntilLaunch(input) ?? 999) >= 7 }
+  {
+    area: "schedule realism",
+    test: (input: PreflightInput) => {
+      const days = daysUntilLaunch(input);
+      return days !== null && days >= 7;
+    }
+  }
 ];
 
 export function checkLaunchReadiness(input: PreflightInput): ReadinessOutput {

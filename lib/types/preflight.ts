@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { landingLensAssessmentSchema } from "./landingLens";
 
 const scoreSchema = z.number().int().min(0).max(100);
 
@@ -58,6 +59,7 @@ export const preflightReportSchema = z.object({
   }),
   overallScore: scoreSchema,
   moduleScores: preflightModuleScoresSchema,
+  landingLens: landingLensAssessmentSchema.optional(),
   summary: z.string(),
   topFixes: z.array(launchFixSchema),
   diagnostics: z.array(launchDiagnosticSchema),

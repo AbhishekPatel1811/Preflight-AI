@@ -78,7 +78,7 @@ export async function fetchPublicTextResource(
   try {
     signal.throwIfAborted();
 
-    const requestedTarget = await resolvePublicHttpUrl(input.url, { lookup });
+    const requestedTarget = await resolveTarget(input.url, lookup, signal);
     let currentTarget = requestedTarget;
     let redirectsFollowed = 0;
 
@@ -105,7 +105,11 @@ export async function fetchPublicTextResource(
         }
 
         await cancelResponseBody(response);
-        currentTarget = await resolvePublicHttpUrl(new URL(location, currentTarget.url).toString(), { lookup });
+        currentTarget = await resolveTarget(
+          new URL(location, currentTarget.url).toString(),
+          lookup,
+          signal
+        );
         redirectsFollowed += 1;
         continue;
       }
@@ -136,6 +140,45 @@ export async function fetchPublicTextResource(
   } finally {
     clearTimeout(timeoutHandle);
   }
+}
+
+async function resolveTarget(
+  url: string,
+  lookup: LookupFn | undefined,
+  signal: AbortSignal
+): Promise<PublicHttpTarget> {
+  return raceWithAbort(resolvePublicHttpUrl(url, { lookup }), signal);
+}
+
+function raceWithAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+
+  return new Promise<T>((resolve, reject) => {
+    const cleanUp = () => {
+      signal.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      cleanUp();
+      reject(sanitizeAbortOrNetworkError(signal));
+    };
+
+    signal.addEventListener("abort", handleAbort, { once: true });
+    if (signal.aborted) {
+      handleAbort();
+      return;
+    }
+
+    operation.then(
+      (value) => {
+        cleanUp();
+        resolve(value);
+      },
+      (error) => {
+        cleanUp();
+        reject(error);
+      }
+    );
+  });
 }
 
 async function performRequest(

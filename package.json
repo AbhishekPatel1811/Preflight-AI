@@ -9,7 +9,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test --grep-invert @live",
+    "test:e2e:ui": "playwright test --ui --grep-invert @live",
+    "test:e2e:live": "playwright test e2e/live-agent.spec.ts",
+    "test:all": "pnpm test && pnpm test:e2e"
   },
   "dependencies": {
     "@openai/agents": "latest",
@@ -29,6 +33,7 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

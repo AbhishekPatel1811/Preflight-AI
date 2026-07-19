@@ -10,7 +10,10 @@ const eslintConfig = [
       "node_modules/**",
       ".pnpm-store/**",
       ".pnpm-home/**",
-      ".tmp/**"
+      ".tmp/**",
+      "docs/qa-evidence/**",
+      "playwright-report/**",
+      "test-results/**"
     ]
   }
 ];

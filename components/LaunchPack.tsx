@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PreflightResult } from "@/lib/types";
 import type { LaunchFix } from "@/lib/types/preflight";
+import { LandingRecommendations } from "./LandingRecommendations";
 
 type BadgeVariant = "default" | "secondary" | "outline" | "success" | "info" | "warning" | "destructive";
 
@@ -67,6 +68,118 @@ function EmptyState({ children }: { children: ReactNode }) {
   );
 }
 
+function LaunchPathItem({
+  item,
+  index
+}: {
+  item: PreflightResult["prioritizedPlan"][number];
+  index: number;
+}) {
+  return (
+    <li className="rounded-md bg-muted p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={priorityVariant(item.priority)}>{item.priority}</Badge>
+        <span className="text-sm font-bold text-foreground">{item.task}</span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.rationale}</p>
+      <p className="mt-2 text-xs font-semibold uppercase text-muted-foreground">Owner: {item.suggestedOwner}</p>
+      <span className="sr-only">Launch task {index + 1}</span>
+    </li>
+  );
+}
+
+function OverflowDetails({
+  count,
+  label,
+  children
+}: {
+  count: number;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="rounded-md border border-border bg-background p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-foreground">
+        View {count} more {label}{count === 1 ? "" : "s"}
+      </summary>
+      <div className="mt-3 space-y-3">{children}</div>
+    </details>
+  );
+}
+
+function RiskItem({ item }: { item: PreflightResult["riskRegister"][number] }) {
+  return (
+    <article className="rounded-md bg-muted p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={severityVariant(item.severity)} className="uppercase">
+          {item.severity}
+        </Badge>
+        <h4 className="text-sm font-bold text-foreground">{item.risk}</h4>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.mitigation}</p>
+    </article>
+  );
+}
+
+function OwnerItem({ item }: { item: PreflightResult["ownerChecklist"][number] }) {
+  return (
+    <article className="rounded-md bg-muted p-3">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-bold text-foreground">{item.owner}</h4>
+        <Badge variant="outline">{item.items.length} {item.items.length === 1 ? "task" : "tasks"}</Badge>
+      </div>
+      <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+        {item.items.slice(0, 3).map((check) => (
+          <li key={check} className="flex gap-2">
+            <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-info" />
+            <span>{check}</span>
+          </li>
+        ))}
+      </ul>
+      {item.items.length > 3 ? (
+        <div className="mt-3">
+          <OverflowDetails count={item.items.length - 3} label="owner task">
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {item.items.slice(3).map((check) => (
+                <li key={check} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-info" />
+                  <span>{check}</span>
+                </li>
+              ))}
+            </ul>
+          </OverflowDetails>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function MessageItem({
+  item,
+  copied,
+  onCopy
+}: {
+  item: PreflightResult["launchCopy"][number];
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <article className="rounded-md bg-muted p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Badge variant="info" className="uppercase">
+          {item.channel}
+        </Badge>
+        <Button size="sm" variant="outline" onClick={onCopy} aria-live="polite">
+          <CopyIcon className="h-4 w-4" aria-hidden="true" />
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <h4 className="mt-3 text-sm font-bold text-foreground">{item.headline}</h4>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
+    </article>
+  );
+}
+
 export function LaunchPack({ result }: { result: PreflightResult }) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -91,6 +204,8 @@ export function LaunchPack({ result }: { result: PreflightResult }) {
         <CardDescription>Launch path, risks, owners, messages, and open questions.</CardDescription>
       </CardHeader>
       <CardContent>
+        <LandingRecommendations recommendations={result.landingRecommendations} />
+
         <div className="grid gap-4 xl:grid-cols-2">
           <LaunchPackPanel
             title="Launch path"
@@ -98,18 +213,25 @@ export function LaunchPack({ result }: { result: PreflightResult }) {
             icon={<ListChecks className="h-4 w-4" aria-hidden="true" />}
           >
             {result.prioritizedPlan.length > 0 ? (
-              <ol className="space-y-3">
-                {result.prioritizedPlan.slice(0, 4).map((item, index) => (
-                  <li key={`${item.task}-${index}`} className="rounded-md bg-muted p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={priorityVariant(item.priority)}>{item.priority}</Badge>
-                      <span className="text-sm font-bold text-foreground">{item.task}</span>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.rationale}</p>
-                    <p className="mt-2 text-xs font-semibold uppercase text-muted-foreground">Owner: {item.suggestedOwner}</p>
-                  </li>
-                ))}
-              </ol>
+              <div className="space-y-3">
+                <ol className="space-y-3">
+                  {result.prioritizedPlan.slice(0, 4).map((item, index) => (
+                    <LaunchPathItem key={`${item.task}-${index}`} item={item} index={index} />
+                  ))}
+                </ol>
+                {result.prioritizedPlan.length > 4 ? (
+                  <details className="rounded-md border border-border bg-background p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                      View {result.prioritizedPlan.length - 4} more launch {result.prioritizedPlan.length === 5 ? "task" : "tasks"}
+                    </summary>
+                    <ol className="mt-3 space-y-3" start={5}>
+                      {result.prioritizedPlan.slice(4).map((item, index) => (
+                        <LaunchPathItem key={`${item.task}-${index + 4}`} item={item} index={index + 4} />
+                      ))}
+                    </ol>
+                  </details>
+                ) : null}
+              </div>
             ) : (
               <EmptyState>No prioritized launch path was returned for this run.</EmptyState>
             )}
@@ -123,16 +245,15 @@ export function LaunchPack({ result }: { result: PreflightResult }) {
             {result.riskRegister.length > 0 ? (
               <div className="space-y-3">
                 {result.riskRegister.slice(0, 4).map((item, index) => (
-                  <article key={`${item.risk}-${index}`} className="rounded-md bg-muted p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={severityVariant(item.severity)} className="uppercase">
-                        {item.severity}
-                      </Badge>
-                      <h4 className="text-sm font-bold text-foreground">{item.risk}</h4>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.mitigation}</p>
-                  </article>
+                  <RiskItem key={`${item.risk}-${index}`} item={item} />
                 ))}
+                {result.riskRegister.length > 4 ? (
+                  <OverflowDetails count={result.riskRegister.length - 4} label="launch risk">
+                    {result.riskRegister.slice(4).map((item, index) => (
+                      <RiskItem key={`${item.risk}-${index + 4}`} item={item} />
+                    ))}
+                  </OverflowDetails>
+                ) : null}
               </div>
             ) : (
               <EmptyState>No major launch risks were returned for this run.</EmptyState>
@@ -147,21 +268,15 @@ export function LaunchPack({ result }: { result: PreflightResult }) {
             {result.ownerChecklist.length > 0 ? (
               <div className="space-y-3">
                 {result.ownerChecklist.slice(0, 3).map((item) => (
-                  <article key={item.owner} className="rounded-md bg-muted p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <h4 className="text-sm font-bold text-foreground">{item.owner}</h4>
-                      <Badge variant="outline">{item.items.length} tasks</Badge>
-                    </div>
-                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      {item.items.slice(0, 3).map((check) => (
-                        <li key={check} className="flex gap-2">
-                          <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-info" />
-                          <span>{check}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
+                  <OwnerItem key={item.owner} item={item} />
                 ))}
+                {result.ownerChecklist.length > 3 ? (
+                  <OverflowDetails count={result.ownerChecklist.length - 3} label="owner">
+                    {result.ownerChecklist.slice(3).map((item) => (
+                      <OwnerItem key={item.owner} item={item} />
+                    ))}
+                  </OverflowDetails>
+                ) : null}
               </div>
             ) : (
               <EmptyState>No owner checklist was returned for this run.</EmptyState>
@@ -179,27 +294,35 @@ export function LaunchPack({ result }: { result: PreflightResult }) {
                   const copyKey = `${item.channel}-${index}`;
 
                   return (
-                    <article key={copyKey} className="rounded-md bg-muted p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Badge variant="info" className="uppercase">
-                          {item.channel}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            void copyMessage(item.channel, item.headline, item.body, index);
-                          }}
-                        >
-                          <CopyIcon className="h-4 w-4" aria-hidden="true" />
-                          {copiedKey === copyKey ? "Copied" : "Copy"}
-                        </Button>
-                      </div>
-                      <h4 className="mt-3 text-sm font-bold text-foreground">{item.headline}</h4>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
-                    </article>
+                    <MessageItem
+                      key={copyKey}
+                      item={item}
+                      copied={copiedKey === copyKey}
+                      onCopy={() => {
+                        void copyMessage(item.channel, item.headline, item.body, index);
+                      }}
+                    />
                   );
                 })}
+                {result.launchCopy.length > 3 ? (
+                  <OverflowDetails count={result.launchCopy.length - 3} label="message">
+                    {result.launchCopy.slice(3).map((item, index) => {
+                      const itemIndex = index + 3;
+                      const copyKey = `${item.channel}-${itemIndex}`;
+
+                      return (
+                        <MessageItem
+                          key={copyKey}
+                          item={item}
+                          copied={copiedKey === copyKey}
+                          onCopy={() => {
+                            void copyMessage(item.channel, item.headline, item.body, itemIndex);
+                          }}
+                        />
+                      );
+                    })}
+                  </OverflowDetails>
+                ) : null}
               </div>
             ) : (
               <EmptyState>No message starters were returned for this run.</EmptyState>

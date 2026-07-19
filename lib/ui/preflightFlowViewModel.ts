@@ -26,7 +26,8 @@ export type PreflightFlowState = {
 };
 
 export type PreflightProgressInput = {
-  eventTypes: StreamEvent["type"][];
+  eventTypes?: StreamEvent["type"][];
+  eventDescriptors?: PreflightProgressEventDescriptor[];
   hasDraftText: boolean;
   hasResult: boolean;
 };
@@ -35,6 +36,12 @@ export type PreflightProgress = {
   activeStageId: PreflightRunStageId;
   completedStageIds: PreflightRunStageId[];
 };
+
+export type PreflightProgressEventDescriptor =
+  | Pick<Extract<StreamEvent, { type: "run_started" }>, "type">
+  | Pick<Extract<StreamEvent, { type: "tool_started" | "tool_completed" }>, "type" | "toolName">
+  | Pick<Extract<StreamEvent, { type: "text_delta" }>, "type">
+  | Pick<Extract<StreamEvent, { type: "final" }>, "type">;
 
 export const preflightDashboardNav = preflightWorkspaceTabs;
 
@@ -45,28 +52,34 @@ export function isActivePreflightRun(runToken: number, activeRunToken: number | 
 }
 
 export function derivePreflightProgress(input: PreflightProgressInput): PreflightProgress {
-  if (input.hasResult || input.eventTypes.includes("final")) {
+  if (input.hasResult || input.eventTypes?.includes("final") || hasDescriptorType(input.eventDescriptors, "final")) {
     return {
       activeStageId: "compiling",
       completedStageIds: [...allStageIds]
     };
   }
 
-  if (input.hasDraftText || input.eventTypes.includes("text_delta")) {
+  if (input.eventDescriptors && input.eventDescriptors.length > 0) {
+    return deriveDescriptorProgress(input);
+  }
+
+  const eventTypes = input.eventTypes ?? [];
+
+  if (input.hasDraftText || eventTypes.includes("text_delta")) {
     return {
       activeStageId: "analyzing",
       completedStageIds: ["fetching", "scanning"]
     };
   }
 
-  if (input.eventTypes.includes("tool_completed")) {
+  if (eventTypes.includes("tool_completed")) {
     return {
       activeStageId: "scoring",
       completedStageIds: ["fetching", "scanning", "analyzing"]
     };
   }
 
-  if (input.eventTypes.includes("tool_started") || input.eventTypes.includes("run_started")) {
+  if (eventTypes.includes("tool_started") || eventTypes.includes("run_started")) {
     return {
       activeStageId: "scanning",
       completedStageIds: ["fetching"]
@@ -77,6 +90,54 @@ export function derivePreflightProgress(input: PreflightProgressInput): Prefligh
     activeStageId: "fetching",
     completedStageIds: []
   };
+}
+
+function deriveDescriptorProgress(input: PreflightProgressInput): PreflightProgress {
+  const descriptors = input.eventDescriptors ?? [];
+  const hasPageSignalToolActivity = descriptors.some(
+    (event) =>
+      (event.type === "tool_started" || event.type === "tool_completed") && event.toolName === "extract_page_signals"
+  );
+  const hasLaterToolStart = descriptors.some(
+    (event) => event.type === "tool_started" && event.toolName !== "extract_page_signals"
+  );
+  const hasLaterToolCompletion = descriptors.some(
+    (event) => event.type === "tool_completed" && event.toolName !== "extract_page_signals"
+  );
+  const hasModelText = input.hasDraftText || hasDescriptorType(descriptors, "text_delta");
+
+  if (hasLaterToolCompletion || hasModelText) {
+    return {
+      activeStageId: "scoring",
+      completedStageIds: ["fetching", "scanning", "analyzing"]
+    };
+  }
+
+  if (hasLaterToolStart) {
+    return {
+      activeStageId: "analyzing",
+      completedStageIds: ["fetching", "scanning"]
+    };
+  }
+
+  if (hasPageSignalToolActivity) {
+    return {
+      activeStageId: "scanning",
+      completedStageIds: ["fetching"]
+    };
+  }
+
+  return {
+    activeStageId: "fetching",
+    completedStageIds: []
+  };
+}
+
+function hasDescriptorType<TType extends PreflightProgressEventDescriptor["type"]>(
+  descriptors: PreflightProgressEventDescriptor[] | undefined,
+  type: TType
+) {
+  return descriptors?.some((event) => event.type === type) ?? false;
 }
 
 export function derivePreflightFlowState(input: PreflightFlowStateInput): PreflightFlowState {

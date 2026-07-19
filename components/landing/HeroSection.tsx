@@ -14,7 +14,7 @@ export function HeroSection() {
       <Reveal className="flex flex-col justify-center">
         <div className="inline-flex w-fit items-center gap-2 rounded-md border border-border bg-card px-3 py-1 text-xs font-semibold uppercase text-muted-foreground">
           <Focus className="h-3.5 w-3.5 text-info" aria-hidden="true" />
-          Precision launch lens
+          Precision launch preflight
         </div>
         <h1 className="mt-6 max-w-4xl text-5xl font-bold leading-tight tracking-normal text-foreground sm:text-6xl">
           Turn rough launch ideas into a readiness report you can act on.

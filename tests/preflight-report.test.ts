@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { PreflightInput, PreflightResult } from "../lib/types";
 import type { PageSignals } from "../lib/types/pageSignals";
+import { scoreLandingLens } from "../lib/agents/landingLens";
 
 const input: PreflightInput = {
   productUrl: "",
@@ -55,6 +56,17 @@ const result: PreflightResult = {
       body: "Improve pull request quality without slowing the team down."
     }
   ],
+  landingRecommendations: {
+    heroHeadline: "Ship cleaner reviews before sprint planning",
+    heroSupportingCopy: "Give engineering teams faster, more consistent pull-request feedback without slowing delivery.",
+    primaryCta: "Review your first pull request",
+    ctaRationale: "The action states the first product outcome.",
+    proofRecommendations: [
+      "Show the median review-time reduction.",
+      "Add one engineering-lead quote.",
+      "Publish supported repository and privacy details."
+    ]
+  },
   followUpQuestions: ["Is this a waitlist launch, public launch, or private beta?"]
 };
 
@@ -168,43 +180,58 @@ test("maps observed page signals into deterministic report coverage and diagnost
   const reportTypes = await import("../lib/types/preflight");
   const reportAgent = await import("../lib/agents/preflightReport");
 
-  const report = reportAgent.mapPreflightResultToPreflightReport(input, {
+  const matchedInput: PreflightInput = {
+    ...input,
+    productBrief: "Launch readiness planning workspace for product teams.",
+    audience: "Product launch teams"
+  };
+  const landingLens = scoreLandingLens(matchedInput, successSignals);
+  const report = reportAgent.mapPreflightResultToPreflightReport(matchedInput, {
     ...result,
-    pageSignals: successSignals
+    pageSignals: successSignals,
+    landingLens
   });
   const parsed = reportTypes.preflightReportSchema.safeParse(report);
 
   assert.equal(parsed.success, true);
   assert.equal(report.product.name, "PreflightAI for launch teams");
   assert.equal(report.product.url, "https://example.com/final");
-  assert.deepEqual(report.moduleScores, {
-    positioning: 100,
-    conversion: 100,
-    trust: 100,
-    demoClarity: 60,
-    geoReadiness: 83,
-    launchOps: 72
-  });
-  assert.equal(report.overallScore, 87);
-  assert.ok(report.overallScore > 72);
+  const criterionScores = Object.fromEntries(
+    landingLens.criteria.map((criterion) => [criterion.id, criterion.score ?? 0])
+  ) as Record<(typeof landingLens.criteria)[number]["id"], number>;
+  assert.equal(
+    report.moduleScores.positioning,
+    Math.round(
+      (criterionScores.heroClarity * 20 +
+        criterionScores.icpClarity * 15 +
+        criterionScores.problemPromise * 15 +
+        criterionScores.differentiation * 10) /
+        60
+    )
+  );
+  assert.equal(
+    report.moduleScores.conversion,
+    Math.round((criterionScores.ctaStrength * 15 + criterionScores.objectionHandling * 10) / 25)
+  );
+  assert.equal(report.moduleScores.trust, criterionScores.trustProof);
+  assert.deepEqual(report.landingLens, landingLens);
   assert.ok(
     report.diagnostics.some(
       (diagnostic) =>
-        diagnostic.title.includes("Observed title") &&
-        diagnostic.evidence.includes("PreflightAI for launch teams") &&
+        diagnostic.module === "Landing Lens" &&
+        diagnostic.title.includes("Hero clarity") &&
+        diagnostic.evidence.includes("Ship launch plans without surprises") &&
         diagnostic.recommendation.length > 0
     )
   );
   assert.ok(
     report.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.title.includes("Observed H1") &&
-        diagnostic.evidence.includes("Ship launch plans without surprises")
+      (diagnostic) => diagnostic.module === "Landing Lens" && diagnostic.title.includes("CTA strength")
     )
   );
   assert.ok(
     report.diagnostics.some(
-      (diagnostic) => diagnostic.title.includes("CTA coverage") && diagnostic.evidence.includes("2 CTA")
+      (diagnostic) => diagnostic.module === "Landing Lens" && diagnostic.evidence.startsWith("Observed")
     )
   );
   assert.ok(
@@ -223,7 +250,9 @@ test("maps observed page signals into deterministic report coverage and diagnost
         diagnostic.evidence.includes("llms.txt: no")
     )
   );
-  assert.ok(!report.diagnostics.some((diagnostic) => diagnostic.title.includes("Landing Lens")));
+  assert.equal(report.diagnostics.filter((diagnostic) => diagnostic.module === "Landing Lens").length, 7);
+  assert.ok(report.topFixes.some((fix) => fix.area.startsWith("Landing page - ")));
+  assert.ok(report.artifacts.some((artifact) => artifact.type === "hero_rewrite"));
 });
 
 test("keeps partial and unavailable page evidence honest", async () => {
@@ -231,11 +260,13 @@ test("keeps partial and unavailable page evidence honest", async () => {
 
   const partialReport = reportAgent.mapPreflightResultToPreflightReport(input, {
     ...result,
-    pageSignals: partialSignals
+    pageSignals: partialSignals,
+    landingLens: scoreLandingLens(input, partialSignals)
   });
   const unavailableReport = reportAgent.mapPreflightResultToPreflightReport(input, {
     ...result,
-    pageSignals: unavailableSignals
+    pageSignals: unavailableSignals,
+    landingLens: scoreLandingLens(input, unavailableSignals)
   });
 
   assert.equal(partialReport.product.url, "https://example.com/product");
@@ -250,11 +281,12 @@ test("keeps partial and unavailable page evidence honest", async () => {
   assert.ok(
     partialReport.diagnostics.some(
       (diagnostic) =>
-        diagnostic.title.includes("Observed H1") &&
-        diagnostic.evidence.includes("No H1 was captured")
+        diagnostic.module === "Landing Lens" &&
+        diagnostic.title.includes("Hero clarity") &&
+        diagnostic.evidence.includes("Observed H1: none")
     )
   );
-  assert.ok(partialReport.overallScore < 72);
+  assert.equal(partialReport.landingLens?.status, "partial");
 
   assert.equal(unavailableReport.product.url, "https://example.com/product");
   assert.equal(unavailableReport.product.name, "AI code review assistant");
@@ -271,7 +303,10 @@ test("keeps partial and unavailable page evidence honest", async () => {
         diagnostic.title.includes("Crawl files") && diagnostic.evidence.includes("not inspected")
     )
   );
-  assert.ok(unavailableReport.overallScore < partialReport.overallScore);
+  assert.equal(unavailableReport.landingLens?.score, null);
+  assert.equal(unavailableReport.moduleScores.positioning, 66);
+  assert.equal(unavailableReport.moduleScores.conversion, 62);
+  assert.equal(unavailableReport.moduleScores.trust, 58);
 });
 
 test("builds a customer-friendly PreflightAI report view model", async () => {

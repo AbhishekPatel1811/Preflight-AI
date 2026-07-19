@@ -2,7 +2,6 @@ import { AgentBrainSection } from "./AgentBrainSection";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { CTASection } from "./CTASection";
-import { DemoConsoleSection } from "./DemoConsoleSection";
 import { HeroSection } from "./HeroSection";
 import { LandingNavigation } from "./LandingNavigation";
 import { OutputsSection } from "./OutputsSection";
@@ -22,7 +21,6 @@ export function LandingPage() {
         <WorkflowSection />
         <OutputsSection />
         <AgentBrainSection />
-        <DemoConsoleSection />
         <CTASection />
       </main>
       <footer className="relative z-10 border-t border-border px-4 py-8 text-center text-sm text-muted-foreground sm:px-6 lg:px-8">

@@ -3,6 +3,7 @@ import test from "node:test";
 import { formatPreflightReportMarkdown } from "../lib/reportExport";
 import type { PreflightInput, PreflightResult } from "../lib/types";
 import type { PageSignals } from "../lib/types/pageSignals";
+import { scoreLandingLens } from "../lib/agents/landingLens";
 
 const input: PreflightInput = {
   productUrl: "",
@@ -44,6 +45,17 @@ const result: PreflightResult = {
       body: "Improve pull request quality without slowing the team down."
     }
   ],
+  landingRecommendations: {
+    heroHeadline: "Ship cleaner reviews before sprint planning",
+    heroSupportingCopy: "Give engineering teams faster, more consistent pull-request feedback without slowing delivery.",
+    primaryCta: "Review your first pull request",
+    ctaRationale: "The action states the first product outcome.",
+    proofRecommendations: [
+      "Show the median review-time reduction.",
+      "Add one engineering-lead quote.",
+      "Publish supported repository and privacy details."
+    ]
+  },
   followUpQuestions: ["Is this a waitlist launch, public launch, or private beta?"]
 };
 
@@ -134,6 +146,8 @@ test("formats the generated PreflightAI report as portable markdown", () => {
   assert.match(markdown, /- \[high\] Demo video depends on unfinished UI polish\./);
   assert.match(markdown, /## Launch copy/);
   assert.match(markdown, /### Landing page/);
+  assert.match(markdown, /## Landing page upgrade/);
+  assert.match(markdown, /Primary CTA: Review your first pull request/);
   assert.match(markdown, /## Follow-up questions/);
   assert.ok(!markdown.includes("undefined"));
 });
@@ -141,7 +155,8 @@ test("formats the generated PreflightAI report as portable markdown", () => {
 test("exports signal-aware audit target, page evidence, and module scores before the plan", () => {
   const markdown = formatPreflightReportMarkdown(input, {
     ...result,
-    pageSignals: successSignals
+    pageSignals: successSignals,
+    landingLens: scoreLandingLens(input, successSignals)
   });
 
   assert.match(markdown, /## Audit target/);
@@ -154,7 +169,9 @@ test("exports signal-aware audit target, page evidence, and module scores before
   assert.match(markdown, /robots\.txt: yes/);
   assert.match(markdown, /llms\.txt: no/);
   assert.match(markdown, /## Module scores/);
-  assert.match(markdown, /Overall: 87\/100/);
+  assert.match(markdown, /## Landing Lens/);
+  assert.match(markdown, /Landing score: \d+\/100/);
+  assert.match(markdown, /Hero clarity: \d+\/100/);
   assert.ok(markdown.indexOf("## Audit target") < markdown.indexOf("## Page signals"));
   assert.ok(markdown.indexOf("## Page signals") < markdown.indexOf("## Module scores"));
   assert.ok(markdown.indexOf("## Module scores") < markdown.indexOf("## Prioritized plan"));
@@ -164,11 +181,13 @@ test("exports signal-aware audit target, page evidence, and module scores before
 test("exports partial and unavailable page evidence conservatively", () => {
   const partialMarkdown = formatPreflightReportMarkdown(input, {
     ...result,
-    pageSignals: partialSignals
+    pageSignals: partialSignals,
+    landingLens: scoreLandingLens(input, partialSignals)
   });
   const unavailableMarkdown = formatPreflightReportMarkdown(input, {
     ...result,
-    pageSignals: unavailableSignals
+    pageSignals: unavailableSignals,
+    landingLens: scoreLandingLens(input, unavailableSignals)
   });
 
   assert.match(partialMarkdown, /Status: partial/);
@@ -176,6 +195,7 @@ test("exports partial and unavailable page evidence conservatively", () => {
   assert.match(partialMarkdown, /Only a limited subset of page elements was inspected\./);
 
   assert.match(unavailableMarkdown, /Status: unavailable/);
+  assert.match(unavailableMarkdown, /Landing score: Not scored/);
   assert.match(unavailableMarkdown, /Title: Not captured/);
   assert.match(unavailableMarkdown, /CTA count: 0/);
   assert.match(unavailableMarkdown, /The page could not be inspected from the public URL\./);

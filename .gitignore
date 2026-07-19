@@ -19,3 +19,6 @@ pnpm-debug.log*
 .superpowers/
 CLAUDE.md
 docs/
+
+.vercel
+.env*

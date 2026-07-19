@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PRODUCT_NAME } from "@/lib/brand";
 import type { PreflightReport } from "@/lib/types/preflight";
 import { getPreflightReportView, type ScoreTone } from "@/lib/ui/preflightViewModel";
+import { LandingLensScorecard } from "./LandingLensScorecard";
 
 const scoreLabels = {
   success: "Launch-ready",
@@ -105,6 +106,8 @@ export function PreflightReportWrapper({ report }: { report: PreflightReport }) 
             ))}
           </div>
 
+          {report.landingLens ? <LandingLensScorecard assessment={report.landingLens} /> : null}
+
           <details className="rounded-lg border border-border bg-muted p-4">
             <summary className="cursor-pointer list-none text-sm font-bold text-foreground">Report context</summary>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -120,7 +123,11 @@ export function PreflightReportWrapper({ report }: { report: PreflightReport }) 
                   <ScanSearch className="h-4 w-4 text-info" aria-hidden="true" />
                   Next lens
                 </div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">URL review becomes the next MVP lens after this layout pass.</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {report.landingLens
+                    ? "Landing Lens is active for this report. GEO readiness is the next roadmap module."
+                    : "Add inspectable page evidence to activate Landing Lens scoring."}
+                </p>
               </div>
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground">

@@ -4,11 +4,17 @@ import { pageSignalsSchema } from "../lib/types/pageSignals";
 import { preflightCoreResultSchema, preflightResultSchema } from "../lib/types";
 import { preflightInputSchema } from "../lib/validators";
 
+function utcDateFromToday(days: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 const urlOnlyContext = {
   productUrl: "https://example.com/product",
-  productBrief: "Launch publicly",
+  productBrief: "Launch this product publicly.",
   audience: "Indie SaaS founders",
-  launchDate: "2026-08-01",
+  launchDate: utcDateFromToday(30),
   constraints: "",
   availableAssets: "",
   manualPageCopy: ""
@@ -44,6 +50,17 @@ const coreResult = {
       body: "Plan the release and close launch risks."
     }
   ],
+  landingRecommendations: {
+    heroHeadline: "Launch with confidence",
+    heroSupportingCopy: "Find launch risks and move every owner toward release day with a clear plan.",
+    primaryCta: "Run your launch audit",
+    ctaRationale: "The action names the immediate outcome.",
+    proofRecommendations: [
+      "Show one quantified outcome.",
+      "Add a customer quote.",
+      "Link to the audit methodology."
+    ]
+  },
   followUpQuestions: ["Who owns launch-day support?"]
 };
 
@@ -79,6 +96,21 @@ test("rejects localhost product URLs", () => {
     preflightInputSchema.safeParse({ ...urlOnlyContext, productUrl: "http://localhost:3000" }).success,
     false
   );
+});
+
+test("rejects IPv4 and IPv6 product URL literals", () => {
+  const urls = [
+    "http://127.0.0.1",
+    "http://10.0.0.4",
+    "https://192.168.1.25/product",
+    "https://8.8.8.8/product",
+    "http://[::1]",
+    "https://[2606:4700:4700::1111]/product"
+  ];
+
+  for (const productUrl of urls) {
+    assert.equal(preflightInputSchema.safeParse({ ...urlOnlyContext, productUrl }).success, false, productUrl);
+  }
 });
 
 test("rejects ftp product URLs", () => {
@@ -120,11 +152,28 @@ test("rejects product URLs with explicit http custom ports", () => {
   );
 });
 
-test("requires at least one primary source", () => {
-  assert.equal(
-    preflightInputSchema.safeParse({ ...urlOnlyContext, productUrl: "", productBrief: "", manualPageCopy: "" }).success,
-    false
-  );
+test("rejects product URLs longer than the audit URL limit", () => {
+  const result = preflightInputSchema.safeParse({
+    ...urlOnlyContext,
+    productUrl: `https://example.com/${"a".repeat(2048)}`
+  });
+
+  assert.equal(result.success, false);
+  if (!result.success) {
+    assert.match(result.error.issues[0]?.message ?? "", /2,048 characters/i);
+  }
+});
+
+test("requires a public product URL even when other source text is provided", () => {
+  const result = preflightInputSchema.safeParse({
+    ...urlOnlyContext,
+    productUrl: "",
+    manualPageCopy: "Visible landing page copy supplied as supporting evidence."
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.error.issues[0]?.path[0], "productUrl");
+  assert.equal(result.error.issues[0]?.message, "Product URL is required.");
 });
 
 test("requires audience with the existing message", () => {
@@ -152,18 +201,37 @@ test("rejects impossible calendar launch dates with the existing message", () =>
 });
 
 test("accepts leap-day launch dates on leap years", () => {
-  assert.equal(preflightInputSchema.safeParse({ ...urlOnlyContext, launchDate: "2028-02-29" }).success, true);
+  const nextLeapYear = (() => {
+    let year = new Date().getUTCFullYear() + 1;
+    while (year % 4 !== 0 || (year % 100 === 0 && year % 400 !== 0)) {
+      year += 1;
+    }
+    return `${year}-02-29`;
+  })();
+
+  assert.equal(preflightInputSchema.safeParse({ ...urlOnlyContext, launchDate: nextLeapYear }).success, true);
 });
 
-test("requires a longer brief when URL and manual page copy are both absent", () => {
+test("rejects launch dates before today", () => {
   const result = preflightInputSchema.safeParse({
     ...urlOnlyContext,
-    productUrl: "",
-    manualPageCopy: "",
-    productBrief: "Too short"
+    launchDate: utcDateFromToday(-1)
   });
+
   assert.equal(result.success, false);
-  assert.equal(result.error.issues[0]?.message, "Add at least a short product brief.");
+  assert.equal(result.error.issues[0]?.message, "Choose today or a future launch date.");
+});
+
+test("accepts today and future launch dates", () => {
+  assert.equal(preflightInputSchema.safeParse({ ...urlOnlyContext, launchDate: utcDateFromToday(0) }).success, true);
+  assert.equal(preflightInputSchema.safeParse({ ...urlOnlyContext, launchDate: utcDateFromToday(1) }).success, true);
+});
+
+test("requires meaningful launch goal and context", () => {
+  const result = preflightInputSchema.safeParse({ ...urlOnlyContext, productBrief: "Too short" });
+
+  assert.equal(result.success, false);
+  assert.equal(result.error.issues[0]?.message, "Add at least a short launch goal and context.");
 });
 
 test("public results accept page signals while core results stay independent", () => {
@@ -176,6 +244,31 @@ test("public results accept page signals while core results stay independent", (
 
   const strippedCoreResult = preflightCoreResultSchema.parse({ ...coreResult, pageSignals });
   assert.equal("pageSignals" in strippedCoreResult, false);
+});
+
+test("structured reports enforce bounded text and collection sizes", () => {
+  assert.equal(preflightCoreResultSchema.safeParse({ ...coreResult, summary: "x".repeat(4001) }).success, false);
+  assert.equal(
+    preflightCoreResultSchema.safeParse({
+      ...coreResult,
+      prioritizedPlan: Array.from({ length: 31 }, () => coreResult.prioritizedPlan[0])
+    }).success,
+    false
+  );
+  assert.equal(
+    preflightCoreResultSchema.safeParse({
+      ...coreResult,
+      ownerChecklist: [{ owner: "Engineering", items: Array.from({ length: 51 }, () => "Verify signup") }]
+    }).success,
+    false
+  );
+  assert.equal(
+    preflightCoreResultSchema.safeParse({
+      ...coreResult,
+      launchCopy: [{ channel: "Email", headline: "Launch ready", body: "x".repeat(8001) }]
+    }).success,
+    false
+  );
 });
 
 test("rejects page signals with oversized metadata collections", () => {

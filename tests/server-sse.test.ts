@@ -1,10 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
+import { agentRequestErrorResponse, isRequestAbort } from "../lib/server/agentRouteControl";
 import { encodeSseEvent, sseEventName } from "../lib/server/sse";
 
 const decoder = new TextDecoder();
-const agentRouteSource = fs.readFileSync(new URL("../app/api/agent/route.ts", import.meta.url), "utf8");
 
 test("sanitizes SSE event names from structured event types", () => {
   assert.equal(sseEventName({ type: "tool:started/v2" }), "tool_started_v2");
@@ -21,15 +20,19 @@ test("encodes SSE frames with sanitized event names and JSON data", () => {
   assert.equal(frame, 'event: text_delta\ndata: {"type":"text delta","delta":"Launch"}\n\n');
 });
 
-test("agent route passes the request abort signal into JSON and streaming agent runs", () => {
-  assert.match(agentRouteSource, /runPreflightAgent\(parsed\.data, env, \{ signal: request\.signal \}\)/);
-  assert.match(agentRouteSource, /streamPreflightAgent\(parsed\.data, env, \{ signal: request\.signal \}\)/);
+test("classifies already-aborted requests as request cancellation", () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  assert.equal(isRequestAbort(new Error("late provider error"), controller.signal), true);
 });
 
-test("agent route guards cancelled SSE enqueue and close operations", () => {
-  assert.match(agentRouteSource, /request\.signal\.aborted/);
-  assert.match(agentRouteSource, /cancel\(\)\s*\{\s*cancelled = true;/);
-  assert.match(agentRouteSource, /isAbortLike\(error, request\.signal\) \|\| cancelled/);
-  assert.match(agentRouteSource, /try\s*\{\s*controller\.enqueue\(encodeSseEvent\(event\)\);/);
-  assert.match(agentRouteSource, /try\s*\{\s*controller\.close\(\);/);
+test("returns a cancellation response shape without provider error details", () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  assert.deepEqual(agentRequestErrorResponse(new Error("secret provider detail"), controller.signal, "test-model"), {
+    status: 499,
+    body: { cancelled: true }
+  });
 });

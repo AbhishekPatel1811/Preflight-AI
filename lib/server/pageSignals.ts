@@ -28,6 +28,7 @@ const TIMEOUT_WARNING = "The page could not be reached within the time limit.";
 const UNSUPPORTED_WARNING = "The page returned an unsupported content type.";
 const SIZE_WARNING = "The page response was larger than the audit limit.";
 const PUBLIC_WARNING = "The URL is not available for public auditing.";
+const PROBE_WARNING = "Some supporting files could not be inspected.";
 export function extractSignalsFromHtml(html: string, options: ExtractOptions): PageSignals {
   const $ = cheerio.load(html);
   const baseUrl = options.finalUrl ?? options.requestedUrl;
@@ -196,9 +197,9 @@ async function probeTextResource(
     });
 
     return { ok: true, text: resource.text };
-  } catch (error) {
+  } catch {
     throwIfCallerAborted(signal);
-    return { ok: false, warning: classifyFetchWarning(error) };
+    return { ok: false, warning: PROBE_WARNING };
   }
 }
 
@@ -374,7 +375,7 @@ function parsePageSignals(signals: PageSignals): PageSignals {
 }
 
 function isKnownWarning(warning: string): boolean {
-  return [TIMEOUT_WARNING, UNSUPPORTED_WARNING, SIZE_WARNING, PUBLIC_WARNING].includes(warning);
+  return [TIMEOUT_WARNING, UNSUPPORTED_WARNING, SIZE_WARNING, PUBLIC_WARNING, PROBE_WARNING].includes(warning);
 }
 
 function throwIfCallerAborted(signal: AbortSignal | undefined): void {

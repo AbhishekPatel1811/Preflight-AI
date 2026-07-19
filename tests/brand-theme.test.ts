@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -35,7 +35,16 @@ test("uses PreflightAI brand and precision theme tokens", () => {
   assert.match(globals, /--radius:\s*1rem/);
   assert.doesNotMatch(globals, /letter-spacing:\s*-0\.02em/);
   assert.match(visibleSources, /PreflightAI/);
-  assert.doesNotMatch(visibleSources, /Launch Lens AI|Launch Lens|LaunchLens|Launch Desk|LaunchDesk|launchLens/);
+  assert.doesNotMatch(visibleSources, /Launch Lens AI|Launch Lens|LaunchLens|Launch Desk|LaunchDesk|launchLens/i);
   assert.doesNotMatch(visibleSources, /\bRocket\b|\bSparkles\b|\bBrainCircuit\b/);
   assert.doesNotMatch(visibleSources, /Local MVP|Agent preview/);
+});
+
+test("keeps the landing page focused without an embedded full-app demo", () => {
+  const landingPage = read("components/landing/LandingPage.tsx");
+  const landingContent = read("lib/landing-content.ts");
+
+  assert.doesNotMatch(landingPage, /DemoConsoleSection|<PreflightApp/);
+  assert.doesNotMatch(landingContent, /href:\s*"#demo"/);
+  assert.equal(existsSync(join(root, "components/landing/DemoConsoleSection.tsx")), false);
 });

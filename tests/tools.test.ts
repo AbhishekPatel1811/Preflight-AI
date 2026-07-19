@@ -4,13 +4,14 @@ import { checkLaunchReadiness } from "../lib/agents/tools/checkLaunchReadiness";
 import { draftLaunchCopy } from "../lib/agents/tools/draftLaunchCopy";
 import { extractTasksFromBrief } from "../lib/agents/tools/extractTasks";
 import { generateOwnerChecklist } from "../lib/agents/tools/generateOwnerChecklist";
-import { preflightInputSchema } from "../lib/validators";
+import { daysUntilLaunch } from "../lib/agents/tools/shared";
+import { getLaunchDateInputValue, preflightInputSchema } from "../lib/validators";
 
 const input = {
-  productUrl: "",
+  productUrl: "https://example.com",
   productBrief: "We are launching an AI code review assistant for small engineering teams with inline pull request feedback.",
   audience: "Startup CTOs and engineering leads",
-  launchDate: "2026-07-15",
+  launchDate: getLaunchDateInputValue(14),
   constraints: "Small team, no paid ads, limited design assets, QA and rollback must be ready",
   availableAssets: "Landing page draft, product demo video, waitlist form, LinkedIn post",
   manualPageCopy: ""
@@ -35,6 +36,25 @@ test("scores launch readiness with rubric output", () => {
 test("generates owner checklists", () => {
   const output = generateOwnerChecklist(input);
   assert.ok(output.owners.some((owner) => owner.owner === "Engineering"));
+});
+
+test("counts launch dates by stable IST calendar days", () => {
+  const beforeUtcRollover = new Date("2026-07-18T23:00:00.000Z");
+  const afterUtcRollover = new Date("2026-07-19T10:00:00.000Z");
+
+  assert.equal(daysUntilLaunch({ ...input, launchDate: "2026-07-19" }, beforeUtcRollover), 0);
+  assert.equal(daysUntilLaunch({ ...input, launchDate: "2026-07-19" }, afterUtcRollover), 0);
+  assert.equal(daysUntilLaunch({ ...input, launchDate: "2026-07-20" }, beforeUtcRollover), 1);
+});
+
+test("returns null for malformed launch dates", () => {
+  assert.equal(daysUntilLaunch({ ...input, launchDate: "not-a-date" }, new Date()), null);
+});
+
+test("malformed launch dates fail schedule readiness", () => {
+  const output = checkLaunchReadiness({ ...input, launchDate: "not-a-date" });
+
+  assert.ok(output.failingAreas.includes("schedule realism"));
 });
 
 test("drafts channel-specific copy", () => {

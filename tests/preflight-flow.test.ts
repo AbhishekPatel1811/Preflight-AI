@@ -135,6 +135,76 @@ test("derives live-run progress from event evidence", () => {
   );
 });
 
+test("derives nuanced progress from minimal stream event descriptors", () => {
+  assert.deepEqual(
+    derivePreflightProgress({
+      eventDescriptors: [{ type: "run_started" }, { type: "tool_started", toolName: "extract_page_signals" }],
+      hasDraftText: false,
+      hasResult: false
+    }),
+    {
+      activeStageId: "scanning",
+      completedStageIds: ["fetching"]
+    }
+  );
+
+  assert.deepEqual(
+    derivePreflightProgress({
+      eventDescriptors: [
+        { type: "run_started" },
+        { type: "tool_started", toolName: "extract_page_signals" },
+        { type: "tool_completed", toolName: "extract_page_signals" },
+        { type: "tool_started", toolName: "extract_launch_tasks" }
+      ],
+      hasDraftText: false,
+      hasResult: false
+    }),
+    {
+      activeStageId: "analyzing",
+      completedStageIds: ["fetching", "scanning"]
+    }
+  );
+
+  assert.deepEqual(
+    derivePreflightProgress({
+      eventDescriptors: [
+        { type: "run_started" },
+        { type: "tool_started", toolName: "extract_page_signals" },
+        { type: "tool_completed", toolName: "extract_page_signals" },
+        { type: "tool_started", toolName: "extract_launch_tasks" },
+        { type: "tool_completed", toolName: "extract_launch_tasks" },
+        { type: "text_delta" }
+      ],
+      hasDraftText: true,
+      hasResult: false
+    }),
+    {
+      activeStageId: "scoring",
+      completedStageIds: ["fetching", "scanning", "analyzing"]
+    }
+  );
+
+  assert.deepEqual(
+    derivePreflightProgress({
+      eventDescriptors: [
+        { type: "run_started" },
+        { type: "tool_started", toolName: "extract_page_signals" },
+        { type: "tool_completed", toolName: "extract_page_signals" },
+        { type: "tool_started", toolName: "extract_launch_tasks" },
+        { type: "tool_completed", toolName: "extract_launch_tasks" },
+        { type: "text_delta" },
+        { type: "final" }
+      ],
+      hasDraftText: true,
+      hasResult: true
+    }),
+    {
+      activeStageId: "compiling",
+      completedStageIds: ["fetching", "scanning", "analyzing", "scoring", "compiling"]
+    }
+  );
+});
+
 test("accepts async run updates only from the active run token", () => {
   assert.equal(isActivePreflightRun(3, 3), true);
   assert.equal(isActivePreflightRun(2, 3), false);

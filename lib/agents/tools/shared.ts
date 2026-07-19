@@ -1,4 +1,5 @@
 import type { PreflightInput } from "@/lib/types";
+import { getLaunchDateInputValue, isValidLaunchDate } from "@/lib/validators";
 
 export type CandidateTask = {
   task: string;
@@ -14,13 +15,21 @@ export function splitList(value: string) {
     .filter(Boolean);
 }
 
-export function daysUntilLaunch(input: PreflightInput) {
-  const launchTime = new Date(input.launchDate).getTime();
-  const now = Date.now();
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
-  if (Number.isNaN(launchTime)) {
+function dateInputValueToUtcTime(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+export function daysUntilLaunch(input: PreflightInput, now = new Date()) {
+  if (!isValidLaunchDate(input.launchDate)) {
     return null;
   }
 
-  return Math.ceil((launchTime - now) / (1000 * 60 * 60 * 24));
+  const launchTime = dateInputValueToUtcTime(input.launchDate);
+  const todayTime = dateInputValueToUtcTime(getLaunchDateInputValue(0, now));
+  const difference = (launchTime - todayTime) / MILLISECONDS_PER_DAY;
+
+  return difference === 0 ? 0 : difference;
 }
